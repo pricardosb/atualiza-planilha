@@ -173,8 +173,8 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
         st.session_state['source_df'] = None
         st.session_state['wb_data'] = None
         st.session_state['last_dest_name'] = None
-        st.session_state['fila_modificacoes'] = []
         st.success("Memória limpa com sucesso! Faça o upload dos novos arquivos abaixo.")
+        st.session_state['fila_modificacoes'] = []
         st.rerun()
 
     col1, col2 = st.columns(2)
@@ -225,7 +225,6 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
         st.write("---")
         st.subheader("4. Correlação dos dados dos Arquivos ORIGEM X DESTINO")
         
-        # Leitura precisa dos nomes das colunas de destino usando Pandas (evita erros de células vazias/mescladas)
         try:
             df_dest_preview = pd.read_excel(io.BytesIO(wb_data), sheet_name=target_sheet, header=header_dest-1)
             df_dest_preview.columns = deduplicar_colunas(df_dest_preview.columns)
@@ -245,7 +244,7 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
         st.write("---")
         st.subheader("5. Local da Atualização")
         modo_insercao = st.radio("Local de inserção:", ["Final da planilha", "A partir de uma linha específica"], key="modo_ins_op1")
-        target_row = st.number_input("Linha:", min_value=header_dest+1, value=header_dest+1, key="target_row_op1") if modo_insercao == "A partir de uma linha específica" else ws.max_row + 1
+        target_row_input = st.number_input("Linha:", min_value=header_dest+1, value=header_dest+1, key="target_row_op1")
 
         st.write("---")
         if st.button("🚀 Processar e Atualizar", key="btn_proc_op1"):
@@ -253,14 +252,30 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
                 st.error("Selecione itens!")
                 st.stop()
             
-            ref_row_idx = (target_row - 1) if modo_insercao == "A partir de uma linha específica" else ws.max_row
-            
+            # Determinação robusta da última linha com dados reais (evita rodapés e linhas vazias no fim)
+            last_data_row = header_dest
+            for r in range(header_dest + 1, ws.max_row + 1):
+                if ws.cell(row=r, column=1).value is not None or ws.cell(row=r, column=2).value is not None:
+                    last_data_row = r
+
+            if modo_insercao == "A partir de uma linha específica":
+                target_row = target_row_input
+                ref_row_idx = target_row - 1
+            else:
+                target_row = last_data_row + 1
+                ref_row_idx = last_data_row
+
+            # Busca robusta da sequência anterior (varrendo para cima se necessário)
             base_seq = 0
-            if ref_row_idx >= header_dest:
-                val_acima = ws.cell(row=ref_row_idx, column=1).value
-                try: base_seq = int(val_acima)
-                except: base_seq = 0
-            
+            r_scan = ref_row_idx
+            while r_scan >= header_dest:
+                val_seq = ws.cell(row=r_scan, column=1).value
+                try:
+                    base_seq = int(val_seq)
+                    break
+                except:
+                    r_scan -= 1
+
             if modo_insercao == "A partir de uma linha específica":
                 ws.insert_rows(target_row, amount=len(selected_indices))
             
@@ -361,7 +376,6 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
             if not valores_antigos_str: valores_antigos_str = "Vazio"
             st.info(f"📌 **Valor(es) atual(is) / antigo(s)** no campo **'{col_target}'** para os registros selecionados: **{valores_antigos_str}**")
             
-            # Limpeza preventiva ANTES de instanciar o text_input para evitar erro do Streamlit
             if st.session_state.get('limpar_input', False):
                 st.session_state['novo_val_op2'] = ""
                 st.session_state['limpar_input'] = False
@@ -456,4 +470,3 @@ elif menu_opcao == "SAIR DO SISTEMA":
     titulo_estilizado("Sessão Encerrada")
     st.info("Você pode fechar esta aba do navegador com segurança.")
     st.stop()
-    
