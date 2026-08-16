@@ -206,7 +206,7 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
 elif menu_opcao == "INFORMAÇÕES GERAIS":
     st.title("⚡ SINALE WEB - EM BUSCA DE AGILIDADE")
     st.subheader("📋 Informações Gerais do Sistema SINALE")
-    st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para extrair e utilizar este arquivo. O formato deste arquivo é exatamente igual ao nosso arquivo de Destino da Opção 1.")
+    st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para obter este arquivo.")
     
     sinale_file = st.file_uploader("Selecione o arquivo exportado do SINALE (.xlsx)", type=["xlsx"], key="sinale_info_upload")
     header_sinale = st.number_input("Linha do cabeçalho no arquivo SINALE:", value=11, min_value=1, key="hdr_sinale_info")
@@ -226,7 +226,7 @@ elif menu_opcao == "INFORMAÇÕES GERAIS":
 elif menu_opcao == "ATUALIZAR DADOS":
     st.title("⚡ SINALE WEB - EM BUSCA DE AGILIDADE")
     st.subheader("🔄 Atualizar Dados do SINALE")
-    st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para obter o arquivo atualizado. O formato deste arquivo é igual ao nosso arquivo de Destino da Opção 1.")
+    st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para obter este arquivo.")
     
     sinale_file_upd = st.file_uploader("Selecione o arquivo do SINALE para atualizar (.xlsx)", type=["xlsx"], key="sinale_upd_upload")
     header_upd = st.number_input("Linha do cabeçalho no arquivo SINALE:", value=11, min_value=1, key="hdr_sinale_upd")
@@ -249,7 +249,7 @@ elif menu_opcao == "ATUALIZAR DADOS":
 elif menu_opcao == "LIMPAR ARQUIVO":
     st.title("⚡ SINALE WEB - EM BUSCA DE AGILIDADE")
     st.subheader("🧹 Limpar Arquivo do SINALE")
-    st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para obter o arquivo base. O formato deste arquivo é igual ao nosso arquivo de Destino da Opção 1. Esta rotina limpa os registros mantendo a estrutura e o cabeçalho.")
+    st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para obter este arquivo.")
     
     sinale_file_clean = st.file_uploader("Selecione o arquivo do SINALE para limpeza (.xlsx)", type=["xlsx"], key="sinale_clean_upload")
     header_clean = st.number_input("Linha do cabeçalho no arquivo SINALE:", value=11, min_value=1, key="hdr_sinale_clean")
@@ -260,7 +260,6 @@ elif menu_opcao == "LIMPAR ARQUIVO":
         ws_c = wb_clean[sheet_clean]
         
         if st.button("🗑️ Executar Limpeza e Baixar"):
-            # Remove todas as linhas abaixo do cabeçalho
             if ws_c.max_row > header_clean:
                 ws_c.delete_rows(header_clean + 1, ws_c.max_row - header_clean)
             
@@ -273,4 +272,41 @@ elif menu_opcao == "LIMPAR ARQUIVO":
 elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
     st.title("⚡ SINALE WEB - EM BUSCA DE AGILIDADE")
     st.subheader("👷 Somente Trabalhadores Ativos")
-    st.info("Módulo em desenvolvimento. Em breve estará disponível aqui no menu!")
+    st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para obter este arquivo.")
+    
+    sinale_file_active = st.file_uploader("Selecione o arquivo do SINALE para filtragem (.xlsx)", type=["xlsx"], key="sinale_active_upload")
+    header_active = st.number_input("Linha do cabeçalho no arquivo SINALE:", value=11, min_value=1, key="hdr_sinale_active")
+    
+    if sinale_file_active:
+        try:
+            sinale_file_active.seek(0)
+            df_preview = pd.read_excel(sinale_file_active, header=header_active-1)
+            wb_active = load_workbook(sinale_file_active)
+            sheet_active = st.selectbox("Escolha a aba:", wb_active.sheetnames, key="sheet_sinale_active")
+            ws_a = wb_active[sheet_active]
+            
+            st.write("---")
+            col_status = st.selectbox("Selecione a coluna que indica o status/situação:", df_preview.columns, key="col_status_active")
+            val_ativo = st.text_input("Informe o texto que define o trabalhador ATIVO:", value="ATIVO", key="val_ativo_input")
+            
+            if st.button("🚀 Filtrar Apenas Ativos e Baixar"):
+                # Filtra as linhas de baixo para cima mantendo a formatação
+                # Vamos ler os valores da planilha linha por linha a partir de header_active + 1
+                linhas_para_remover = []
+                for r in range(header_active + 1, ws_a.max_row + 1):
+                    val_celula = ws_a.cell(row=r, column=list(df_preview.columns).index(col_status) + 1).value
+                    # Compara string convertendo para maiúsculo
+                    if val_celula is None or str(val_ativo).strip().upper() not in str(val_celula).strip().upper():
+                        linhas_para_remover.append(r)
+                
+                # Remove de trás para frente para não alterar índices das linhas anteriores
+                for r in sorted(linhas_para_remover, reverse=True):
+                    ws_a.delete_rows(r, 1)
+                
+                buffer = io.BytesIO()
+                wb_active.save(buffer)
+                buffer.seek(0)
+                st.success("✅ Arquivo filtrado com sucesso mantendo apenas trabalhadores ativos!")
+                st.download_button("📥 Baixar Arquivo de Trabalhadores Ativos", buffer.getvalue(), "sinale_trabalhadores_ativos.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        except Exception as e:
+            st.error(f"Erro ao processar o arquivo: {e}")
