@@ -313,9 +313,24 @@ elif menu_opcao == "ATUALIZAR DADOS":
             if not lista_colunas:
                 st.error("Nenhuma coluna encontrada na linha de cabeçalho especificada!")
             else:
+                # --- BOTÕES DE SELECIONAR / DESMARCAR TODOS ---
+                if "selectAllState" not in st.session_state:
+                    st.session_state["selectAllState"] = True
+
+                st.subheader("1. Seleção dos Registros a Atualizar")
+                col_btn1, col_btn2, _ = st.columns([1, 1, 2])
+                with col_btn1:
+                    if st.button("✅ Selecionar Todos", key="btn_sel_all"):
+                        st.session_state["selectAllState"] = True
+                        st.rerun()
+                with col_btn2:
+                    if st.button("❌ Desmarcar Todos", key="btn_des_all"):
+                        st.session_state["selectAllState"] = False
+                        st.rerun()
+
                 dados_tabela = []
                 for r in range(header_upd + 1, ws_u.max_row + 1):
-                    row_data = {}
+                    row_data = {"Selecionar": st.session_state["selectAllState"]}
                     has_data = False
                     for col_name, c_idx in cabecalhos.items():
                         cell_val = ws_u.cell(row=r, column=c_idx).value
@@ -326,68 +341,64 @@ elif menu_opcao == "ATUALIZAR DADOS":
                         row_data["_excel_row"] = r
                         dados_tabela.append(row_data)
                 
-                # --- 1. SELEÇÃO DE REGISTROS (PRÉ-SELECIONADOS POR PADRÃO) ---
-                st.subheader("1. Seleção dos Registros a Atualizar")
-                modo_atd_reg = st.radio("Como deseja selecionar os registros?", ["Selecionar registros específicos", "Atualizar todos os registros da planilha"], key="modo_atd_reg")
-                
-                linhas_excel_alvo = []
-                if modo_atd_reg == "Selecionar registros específicos":
-                    col_busca_upd = st.selectbox("Coluna identificadora para busca:", lista_colunas, key="col_busca_upd")
-                    
-                    opcoes_selecao_upd = [f"{row[col_busca_upd]} (Linha Excel {row['_excel_row']})" for row in dados_tabela if row.get(col_busca_upd) is not None]
-                    
-                    # Todos os registros vêm pré-selecionados por padrão (default=opcoes_selecao_upd)
-                    selected_options_upd = st.multiselect("🔍 Escolha os registros:", opcoes_selecao_upd, default=opcoes_selecao_upd, key="sel_opts_upd")
-                    
-                    for item in selected_options_upd:
-                        try:
-                            l_num = int(item.split("(Linha Excel ")[1].replace(")", ""))
-                            linhas_excel_alvo.append(l_num)
-                        except: pass
-                    
-                    if linhas_excel_alvo:
-                        st.info(f"📊 **{len(linhas_excel_alvo)}** registro(s) selecionado(s) para atualização.")
+                if not dados_tabela:
+                    st.warning("Nenhum dado encontrado abaixo da linha de cabeçalho.")
                 else:
-                    linhas_excel_alvo = [row["_excel_row"] for row in dados_tabela]
-                    st.info(f"📊 Todos os **{len(linhas_excel_alvo)}** registros da planilha serão considerados.")
-                
-                st.write("---")
-                
-                # --- 2. DEFINIÇÃO DO CAMPO E VALOR (Sempre visível para dar seguimento direto) ---
-                st.subheader("2. Definir Campo e Novo Valor")
-                col_alvo_upd = st.selectbox("Selecione o campo (coluna) que deseja atualizar:", lista_colunas, key="col_alvo_upd")
-                novo_valor = st.text_input("Informe o novo valor para este campo:", key="novo_valor_input")
-                
-                st.write("---")
-                
-                if st.button("🚀 Processar Atualização", key="btn_proc_upd"):
-                    if modo_atd_reg == "Selecionar registros específicos" and not linhas_excel_alvo:
-                        st.error("⚠️ Selecione ao menos um registro na lista acima antes de processar!")
-                    else:
-                        col_idx_excel = cabecalhos.get(col_alvo_upd)
-                        if not col_idx_excel:
-                            st.error(f"Coluna '{col_alvo_upd}' não encontrada no arquivo.")
-                        else:
-                            count_atualizados = 0
-                            for excel_row in linhas_excel_alvo:
-                                ws_u.cell(row=excel_row, column=col_idx_excel, value=novo_valor)
-                                count_atualizados += 1
-                            
-                            buffer = io.BytesIO()
-                            wb_upd.save(buffer)
-                            st.session_state["upd_file_bytes"] = buffer.getvalue()
-                            st.session_state["upd_success_msg"] = f"✅ {count_atualizados} registro(s) atualizado(s) com sucesso na coluna **{col_alvo_upd}**!"
-                
-                # --- EXIBIÇÃO PERSISTENTE DO BOTÃO DE DOWNLOAD ---
-                if "upd_file_bytes" in st.session_state:
-                    st.success(st.session_state["upd_success_msg"])
-                    st.download_button(
-                        "📥 Baixar Arquivo SINALE Atualizado", 
-                        st.session_state["upd_file_bytes"], 
-                        "sinale_atualizado_dados.xlsx", 
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="dl_btn_upd"
+                    df_upd_view = pd.DataFrame(dados_tabela)
+                    cols_ordenadas = ["Selecionar"] + [c for c in lista_colunas if c in df_upd_view.columns] + ["_excel_row"]
+                    df_upd_view = df_upd_view[[c for c in cols_ordenadas if c in df_upd_view.columns]]
+                    
+                    df_editado = st.data_editor(
+                        df_upd_view,
+                        column_config={
+                            "Selecionar": st.column_config.CheckboxColumn("Atualizar?"),
+                            "_excel_row": st.column_config.NumberColumn("Linha Excel", disabled=True)
+                        },
+                        disabled=[c for c in df_upd_view.columns if c not in ["Selecionar"]],
+                        hide_index=True,
+                        key="data_editor_upd"
                     )
+                    
+                    linhas_excel_alvo = df_editado[df_editado["Selecionar"] == True]["_excel_row"].tolist()
+                    st.info(f"📊 **{len(linhas_excel_alvo)}** registro(s) selecionado(s) para atualização.")
+                    
+                    st.write("---")
+                    
+                    # --- 2. DEFINIÇÃO DO CAMPO E VALOR ---
+                    st.subheader("2. Definir Campo e Novo Valor")
+                    col_alvo_upd = st.selectbox("Selecione o campo (coluna) que deseja atualizar:", lista_colunas, key="col_alvo_upd")
+                    novo_valor = st.text_input("Informe o novo valor para este campo:", key="novo_valor_input")
+                    
+                    st.write("---")
+                    
+                    if st.button("🚀 Processar Atualização", key="btn_proc_upd"):
+                        if not linhas_excel_alvo:
+                            st.error("⚠️ Selecione ao menos um registro na tabela acima antes de processar!")
+                        else:
+                            col_idx_excel = cabecalhos.get(col_alvo_upd)
+                            if not col_idx_excel:
+                                st.error(f"Coluna '{col_alvo_upd}' não encontrada no arquivo.")
+                            else:
+                                count_atualizados = 0
+                                for excel_row in linhas_excel_alvo:
+                                    ws_u.cell(row=excel_row, column=col_idx_excel, value=novo_valor)
+                                    count_atualizados += 1
+                                
+                                buffer = io.BytesIO()
+                                wb_upd.save(buffer)
+                                st.session_state["upd_file_bytes"] = buffer.getvalue()
+                                st.session_state["upd_success_msg"] = f"✅ {count_atualizados} registro(s) atualizado(s) com sucesso na coluna **{col_alvo_upd}**!"
+                    
+                    # --- EXIBIÇÃO PERSISTENTE DO BOTÃO DE DOWNLOAD ---
+                    if "upd_file_bytes" in st.session_state:
+                        st.success(st.session_state["upd_success_msg"])
+                        st.download_button(
+                            "📥 Baixar Arquivo SINALE Atualizado", 
+                            st.session_state["upd_file_bytes"], 
+                            "sinale_atualizado_dados.xlsx", 
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="dl_btn_upd"
+                        )
         except Exception as e:
             st.error(f"Erro ao processar o arquivo para atualização: {e}")
 
