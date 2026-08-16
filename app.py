@@ -4,7 +4,6 @@ import streamlit as st
 from openpyxl import load_workbook
 from copy import copy
 
-# Função para copiar TUDO da célula
 def copiar_estilo_completo(origem, destino):
     if origem.has_style:
         destino.font = copy(origem.font)
@@ -15,9 +14,9 @@ def copiar_estilo_completo(origem, destino):
         destino.alignment = copy(origem.alignment)
 
 st.set_page_config(page_title="Integrador Profissional", layout="wide")
-st.title("⚡ Integrador: Versão com Persistência Total")
+st.title("⚡ Integrador Profissional")
 
-# --- 1. CARREGAMENTO COM PERSISTÊNCIA ---
+# --- CARREGAMENTO COM PERSISTÊNCIA ---
 col1, col2 = st.columns(2)
 with col1:
     source_file = st.file_uploader("1. Arquivo de ORIGEM", type=["xlsx", "xls", "csv", "txt"])
@@ -26,7 +25,6 @@ with col2:
     dest_file = st.file_uploader("2. Arquivo de DESTINO (.xlsx)", type=["xlsx"])
     header_dest = st.number_input("Linha do cabeçalho no Destino:", value=11, min_value=1)
 
-# Persistência da Origem
 if source_file:
     cache_key_src = f"{source_file.name}_{origem_tem_cabecalho}"
     if "source_df" not in st.session_state or st.session_state.get("last_cache_key_src") != cache_key_src:
@@ -48,22 +46,20 @@ if source_file:
             st.session_state["source_df"] = raw
             st.session_state["last_cache_key_src"] = cache_key_src
 
-# Persistência do Destino
 if dest_file:
     if "wb_data" not in st.session_state or st.session_state.get("last_dest_name") != dest_file.name:
         dest_file.seek(0)
         st.session_state["wb_data"] = dest_file.getvalue()
         st.session_state["last_dest_name"] = dest_file.name
 
-# --- 2. MAPEAMENTO ---
+# --- MAPEAMENTO ---
 df_origem = st.session_state.get("source_df")
 wb_data = st.session_state.get("wb_data")
 
 if df_origem is not None and wb_data is not None:
-    st.write("📋 **Colunas detectadas na origem:**", list(df_origem.columns))
-    
     wb = load_workbook(io.BytesIO(wb_data))
-    target_sheet = st.selectbox("4. Escolha a ABA:", wb.sheetnames)
+    # Descrição alterada conforme solicitado
+    target_sheet = st.selectbox("Escolha a ABA na Planilha de Destino:", wb.sheetnames)
     ws = wb[target_sheet]
 
     st.subheader("3. Seleção e Mapeamento")
@@ -85,44 +81,62 @@ if df_origem is not None and wb_data is not None:
             if map_val != "--- Não mapear ---":
                 mapping[i] = map_val
 
-    # --- 3. LOCAL DE INSERÇÃO ---
+    # --- LOCAL DE INSERÇÃO ---
     modo_insercao = st.radio("Local de inserção:", ["Final da planilha", "A partir de uma linha específica"])
     target_row = st.number_input("Linha:", min_value=header_dest+1, value=header_dest+1) if modo_insercao == "A partir de uma linha específica" else ws.max_row + 1
 
-    # --- 4. PROCESSAMENTO ---
+    # --- PROCESSAMENTO ---
     if st.button("🚀 Processar e Atualizar"):
         if not selected_indices: st.error("Selecione itens!"); st.stop()
         
-        num_new = len(selected_indices)
-        if modo_insercao == "A partir de uma linha específica":
-            ws.insert_rows(target_row, amount=num_new)
+        # 1. Preparar o cálculo da sequência inicial
+        ref_row_idx = (target_row - 1) if modo_insercao == "A partir de uma linha específica" else (ws.max_row)
         
-        ref_row_idx = target_row - 1
         base_seq = 0
-        if ref_row_idx > 0:
+        if ref_row_idx >= header_dest:
             val_acima = ws.cell(row=ref_row_idx, column=1).value
-            if isinstance(val_acima, (int, float)): base_seq = int(val_acima)
-
+            try:
+                base_seq = int(val_acima)
+            except:
+                base_seq = 0
+        
+        # 2. Inserir linhas se for no meio
+        if modo_insercao == "A partir de uma linha específica":
+            ws.insert_rows(target_row, amount=len(selected_indices))
+        
+        # 3. Escrever dados
         current_row = target_row
         seq_val = base_seq
 
         for idx in selected_indices:
             seq_val += 1
-            for col_idx, origem_col in mapping.items():
+            # Itera por TODAS as colunas da planilha para garantir limpeza das não mapeadas
+            for col_idx in range(1, ws.max_column + 1):
                 target_cell = ws.cell(row=current_row, column=col_idx)
-                if origem_col == "⚠️ Auto-incrementar (Seq)":
-                    target_cell.value = seq_val
-                else:
-                    target_cell.value = df_origem.iloc[idx][origem_col]
-                
                 ref_cell = ws.cell(row=ref_row_idx, column=col_idx)
+                
+                # Copia estilo da linha anterior (ou cabeçalho)
                 copiar_estilo_completo(ref_cell, target_cell)
+                
+                # Define valor (ou limpa se não mapeado)
+                if col_idx in mapping:
+                    origem_col = mapping[col_idx]
+                    if origem_col == "⚠️ Auto-incrementar (Seq)":
+                        target_cell.value = seq_val
+                    else:
+                        target_cell.value = df_origem.iloc[idx][origem_col]
+                else:
+                    target_cell.value = None # <--- LIMPA CÉLULAS NÃO MAPEADAS
+            
             current_row += 1
 
+        # 4. Re-sequenciamento (corrige sequência abaixo caso tenha inserido no meio)
         if modo_insercao == "A partir de uma linha específica":
             for r in range(current_row, ws.max_row + 1):
-                seq_val += 1
-                ws.cell(row=r, column=1, value=seq_val)
+                val_atual = ws.cell(row=r, column=1).value
+                if val_atual is not None:
+                    seq_val += 1
+                    ws.cell(row=r, column=1, value=seq_val)
 
         buffer = io.BytesIO()
         wb.save(buffer)
