@@ -190,11 +190,15 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
             hdr = 0 if origem_tem_cabecalho else None
             try:
                 source_file.seek(0)
-                raw = pd.read_excel(source_file, header=hdr)
+                ext = source_file.name.split('.')[-1].lower()
+                engine_util = 'xlrd' if ext == 'xls' else ('openpyxl' if ext == 'xlsx' else None)
+                
+                raw = pd.read_excel(source_file, header=hdr, engine=engine_util)
                 raw.columns = deduplicar_colunas(raw.columns) if origem_tem_cabecalho else [f"Col {i+1}" for i in range(len(raw.columns))]
                 st.session_state["source_df"] = raw
                 st.session_state["last_cache_key_src"] = cache_key_src
-            except: st.error("Erro ao ler arquivo.")
+            except Exception as e: 
+                st.error(f"Erro ao ler arquivo: {e}")
 
     if dest_file:
         if "wb_data" not in st.session_state or st.session_state.get("last_dest_name") != dest_file.name:
