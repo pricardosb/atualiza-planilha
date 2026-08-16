@@ -48,7 +48,7 @@ menu_opcao = st.sidebar.radio("Selecione a rotina:", [
     "SAIR DO SISTEMA"
 ])
 
-# --- OPÇÃO 1: INCLUSÃO DE TRABALHO (ORIGINAL) ---
+# --- OPÇÃO 1: INCLUSÃO DE TRABALHO (ORIGINAL COMPLETA) ---
 if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
     titulo_estilizado("Rotina: Inclusão de Trabalho")
     col1, col2 = st.columns(2)
@@ -159,12 +159,23 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         
         df_editado = st.data_editor(df_for_edit, column_config={"Atualizar?": st.column_config.CheckboxColumn()}, use_container_width=True)
         
-        # 3. CONTAGEM E ATUALIZAÇÃO
+        # 3. CONTAGEM, VALOR ATUAL E ATUALIZAÇÃO
         selecionados = df_editado[df_editado["Atualizar?"] == True]
         st.metric("Total de Registros Marcados", len(selecionados))
         
         if not selecionados.empty:
             col_target = st.selectbox("Selecione a coluna que deseja alterar:", df.columns)
+            
+            # --- EXIBIÇÃO DO VALOR ATUAL DO CAMPO SELECIONADO ---
+            valores_atuais = selecionados[col_target].dropna().unique()
+            
+            if len(valores_atuais) == 1:
+                st.info(f"💡 **Valor Atual no(s) registro(s) selecionado(s):** `{valores_atuais[0]}`")
+            elif len(valores_atuais) > 1:
+                st.warning(f"⚠️ **Atenção:** Os registros selecionados possuem **{len(valores_atuais)} valores diferentes** nesta coluna: `{list(valores_atuais)}`")
+            else:
+                st.info("💡 **Valor Atual:** *(Vazio / Nulo)*")
+            
             novo_val = st.text_input("Digite o novo valor:")
             
             if st.button("🚀 Aplicar Atualização"):
