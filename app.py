@@ -43,16 +43,18 @@ def extrair_valor_limpo(df, idx, col_name):
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Integrador Profissional", layout="wide")
-st.title("⚡ INTEGRADOR ==> DADOS GERAIS DO INTERNO >>> SINALE")
+st.title("⚡ Integrador Profissional")
 
 # --- CARREGAMENTO ---
 col1, col2 = st.columns(2)
 with col1:
-    source_file = st.file_uploader("1. Arquivo de ORIGEM", type=["xlsx", "xls", "csv", "txt"])
-    origem_tem_cabecalho = st.checkbox("Arquivo de Origem tem cabeçalho?", value=True)
+    st.subheader("1. Arquivo de ORIGEM")
+    source_file = st.file_uploader("Selecione o arquivo de ORIGEM", type=["xlsx", "xls", "csv", "txt"], key="src_upload")
+    origem_tem_cabecalho = st.checkbox("Origem tem cabeçalho na 1ª linha?", value=True)
 with col2:
-    dest_file = st.file_uploader("2. Arquivo de DESTINO (.xlsx)", type=["xlsx"])
-    header_dest = st.number_input("Linha do cabeçalho no Arquivo de Destino:", value=11, min_value=1)
+    st.subheader("2. Arquivo de DESTINO")
+    dest_file = st.file_uploader("Selecione o arquivo de DESTINO (.xlsx)", type=["xlsx"], key="dest_upload")
+    header_dest = st.number_input("Linha do cabeçalho no Destino:", value=11, min_value=1)
 
 if source_file:
     cache_key_src = f"{source_file.name}_{origem_tem_cabecalho}"
@@ -83,30 +85,32 @@ if dest_file:
         st.session_state["wb_data"] = dest_file.getvalue()
         st.session_state["last_dest_name"] = dest_file.name
 
-# --- MAPEAMENTO ---
+# --- FLUXO PRINCIPAL ---
 df_origem = st.session_state.get("source_df")
 wb_data = st.session_state.get("wb_data")
 
 if df_origem is not None and wb_data is not None:
     wb = load_workbook(io.BytesIO(wb_data))
     
-    # Descrição exata solicitada
     target_sheet = st.selectbox("Escolha a ABA na Planilha de Destino a ser Atualizada:", wb.sheetnames)
     ws = wb[target_sheet]
 
-    st.subheader("3. Seleção e Mapeamento")
+    # --- 3. SELEÇÃO DE REGISTROS ---
+    st.subheader("3. Seleção de Registros")
     col_busca = st.selectbox("Coluna identificadora (para seleção):", df_origem.columns)
     
     opcoes_selecao = [f"{val} (Linha {idx})" for idx, val in df_origem[col_busca].items()]
     selected_options = st.multiselect("🔍 Escolha os registros:", opcoes_selecao)
     selected_indices = [int(item.split("(Linha ")[1].replace(")", "")) for item in selected_options]
 
-    # Exibição da quantidade de registros selecionados
     if selected_indices:
         st.info(f"📊 **{len(selected_indices)}** registro(s) selecionado(s) para atualização.")
 
-    mapping = {}
     st.write("---")
+
+    # --- 4. CORRELAÇÃO ORIGEM X DESTINO ---
+    st.subheader("4. Correlação ORIGEM X DESTINO")
+    mapping = {}
     cols_ui = st.columns(4)
     opcoes_mapeamento = ["--- Não mapear ---", "⚠️ Auto-incrementar (Seq)"] + list(df_origem.columns)
     
@@ -116,6 +120,8 @@ if df_origem is not None and wb_data is not None:
             map_val = st.selectbox(f"Col {i} ({header_val or 'S/ Título'})", opcoes_mapeamento, key=f"map_{i}")
             if map_val != "--- Não mapear ---":
                 mapping[i] = map_val
+
+    st.write("---")
 
     # --- LOCAL DE INSERÇÃO ---
     modo_insercao = st.radio("Local de inserção:", ["Final da planilha", "A partir de uma linha específica"])
