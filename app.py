@@ -43,18 +43,18 @@ def extrair_valor_limpo(df, idx, col_name):
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Integrador Profissional", layout="wide")
-st.title("⚡ Integrador Profissional")
+st.title("⚡ INTEGRADOR ==> DADOS GERAIS DO INTERNO >>> SINALE")
 
 # --- CARREGAMENTO ---
 col1, col2 = st.columns(2)
 with col1:
     st.subheader("1. Arquivo de ORIGEM")
     source_file = st.file_uploader("Selecione o arquivo de ORIGEM", type=["xlsx", "xls", "csv", "txt"], key="src_upload")
-    origem_tem_cabecalho = st.checkbox("Origem tem cabeçalho na 1ª linha?", value=True)
+    origem_tem_cabecalho = st.checkbox("Arquivo de Origem tem cabeçalho?", value=True)
 with col2:
     st.subheader("2. Arquivo de DESTINO")
     dest_file = st.file_uploader("Selecione o arquivo de DESTINO (.xlsx)", type=["xlsx"], key="dest_upload")
-    header_dest = st.number_input("Linha do cabeçalho no Destino:", value=11, min_value=1)
+    header_dest = st.number_input("Linha do cabeçalho no Arquivo de Destino:", value=11, min_value=1)
 
 if source_file:
     cache_key_src = f"{source_file.name}_{origem_tem_cabecalho}"
@@ -109,7 +109,7 @@ if df_origem is not None and wb_data is not None:
     st.write("---")
 
     # --- 4. CORRELAÇÃO ORIGEM X DESTINO ---
-    st.subheader("4. CORRELAÇÃO ORIGEM X DESTINO")
+    st.subheader("4. Correlação dos dados dos Arquivos ORIGEM X DESTINO")
     mapping = {}
     cols_ui = st.columns(4)
     opcoes_mapeamento = ["--- Não mapear ---", "⚠️ Auto-incrementar (Seq)"] + list(df_origem.columns)
@@ -124,7 +124,7 @@ if df_origem is not None and wb_data is not None:
     st.write("---")
 
     # --- 5. LOCAL DA ATUALIZAÇÃO ---
-    st.subheader("5. LOCAL DA ATUALIZAÇÃO")
+    st.subheader("5. Local da Atualização")
     modo_insercao = st.radio("Local de inserção:", ["Final da planilha", "A partir de uma linha específica"])
     target_row = st.number_input("Linha:", min_value=header_dest+1, value=header_dest+1) if modo_insercao == "A partir de uma linha específica" else ws.max_row + 1
 
