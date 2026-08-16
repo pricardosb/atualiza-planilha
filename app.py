@@ -255,8 +255,19 @@ elif menu_opcao == "INFORMAÇÕES GERAIS":
             st.write(f"- **Aba em análise:** `{sheet_sinale}`")
             st.write(f"- **Linha de cabeçalho:** {header_sinale}")
             
+            st.write("---")
+            st.subheader("👁️ Seleção de Colunas para Visualização")
+            colunas_selecionadas = st.multiselect(
+                "Escolha quais colunas deseja exibir na prévia:",
+                options=list(df_info.columns),
+                default=list(df_info.columns)
+            )
+            
             st.subheader("📋 Prévia dos Dados da Aba Selecionada")
-            st.dataframe(df_info.head(10), use_container_width=True)
+            if colunas_selecionadas:
+                st.dataframe(df_info[colunas_selecionadas].head(10), use_container_width=True)
+            else:
+                st.warning("Selecione pelo menos uma coluna para visualizar a prévia.")
         except Exception as e:
             st.error(f"Erro ao processar a planilha selecionada: {e}")
 
