@@ -6,7 +6,7 @@ from openpyxl import load_workbook
 from copy import copy
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Integrador Profissional", layout="wide")
+st.set_page_config(page_title="SINALE WEB - Em Busca de Agilidade", layout="wide")
 
 # --- FUNÇÕES DE SUPORTE ---
 def copiar_estilo_completo(origem, destino):
@@ -50,8 +50,9 @@ menu_opcao = st.sidebar.radio(
     "Selecione a rotina:",
     [
         "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO",
-        "ATUALIZAÇÃO DE DADOS - FREQUENCIA",
-        "ATUALIZAÇÃO DE DADOS - EXCLUSÃO DO TRABALHO",
+        "INFORMAÇÕES GERAIS",
+        "ATUALIZAR DADOS",
+        "LIMPAR ARQUIVO",
         "SOMENTE TRABALHADORES ATIVOS",
         "SAIR DO SISTEMA"
     ]
@@ -63,7 +64,8 @@ if menu_opcao == "SAIR DO SISTEMA":
 
 # --- ROTEAMENTO DAS OPÇÕES ---
 if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
-    st.title("⚡ INTEGRADOR ==> DADOS GERAIS DO INTERNO >>> SINALE")
+    st.title("⚡ SINALE WEB - EM BUSCA DE AGILIDADE")
+    st.subheader("Rotina: Inclusão de Trabalho")
 
     # --- CARREGAMENTO ---
     col1, col2 = st.columns(2)
@@ -154,7 +156,6 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
         if st.button("🚀 Processar e Atualizar"):
             if not selected_indices: st.error("Selecione itens!"); st.stop()
             
-            # 1. Obter valor base de sequência da linha anterior
             ref_row_idx = (target_row - 1) if modo_insercao == "A partir de uma linha específica" else (ws.max_row)
             
             base_seq = 0
@@ -165,11 +166,9 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
                 except:
                     base_seq = 0
             
-            # 2. Inserir linhas caso seja no meio
             if modo_insercao == "A partir de uma linha específica":
                 ws.insert_rows(target_row, amount=len(selected_indices))
             
-            # 3. Escrever dados e numeração
             current_row = target_row
             seq_val = base_seq
 
@@ -179,21 +178,18 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
                     target_cell = ws.cell(row=current_row, column=col_idx)
                     ref_cell = ws.cell(row=ref_row_idx, column=col_idx)
                     
-                    # Copia formatação integral da célula de referência
                     copiar_estilo_completo(ref_cell, target_cell)
                     
-                    # Gravação robusta
                     if col_idx == 1 or mapping.get(col_idx) == "⚠️ Auto-incrementar (Seq)":
                         target_cell.value = seq_val
                     elif col_idx in mapping:
                         origem_col = mapping[col_idx]
                         target_cell.value = extrair_valor_limpo(df_origem, idx, origem_col)
                     else:
-                        target_cell.value = None # Limpa colunas não mapeadas
+                        target_cell.value = None
                 
                 current_row += 1
 
-            # 4. Re-sequenciar linhas abaixo (caso inserido no meio)
             if modo_insercao == "A partir de uma linha específica":
                 for r in range(current_row, ws.max_row + 1):
                     val_atual = ws.cell(row=r, column=1).value
@@ -205,16 +201,76 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
             wb.save(buffer)
             buffer.seek(0)
             st.success("✅ Processamento concluído com sucesso!")
-            st.download_button("📥 Baixar Arquivo Atualizado", buffer.getvalue(), "destino_atualizado.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            st.download_button("📥 Baixar Arquivo Atualizado", buffer.getvalue(), "sinale_atualizado.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-elif menu_opcao == "ATUALIZAÇÃO DE DADOS - FREQUENCIA":
-    st.title("📅 ATUALIZAÇÃO DE DADOS - FREQUENCIA")
-    st.info("Módulo em desenvolvimento. Em breve estará disponível aqui no menu!")
+elif menu_opcao == "INFORMAÇÕES GERAIS":
+    st.title("⚡ SINALE WEB - EM BUSCA DE AGILIDADE")
+    st.subheader("📋 Informações Gerais do Sistema SINALE")
+    st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para extrair e utilizar este arquivo. O formato deste arquivo é exatamente igual ao nosso arquivo de Destino da Opção 1.")
+    
+    sinale_file = st.file_uploader("Selecione o arquivo exportado do SINALE (.xlsx)", type=["xlsx"], key="sinale_info_upload")
+    header_sinale = st.number_input("Linha do cabeçalho no arquivo SINALE:", value=11, min_value=1, key="hdr_sinale_info")
+    
+    if sinale_file:
+        wb_sinale = load_workbook(sinale_file)
+        sheet_sinale = st.selectbox("Escolha a aba do arquivo SINALE:", wb_sinale.sheetnames, key="sheet_sinale_info")
+        ws_s = wb_sinale[sheet_sinale]
+        
+        st.write("---")
+        st.markdown(f"### 📊 Resumo do Arquivo")
+        st.write(f"- **Aba selecionada:** {sheet_sinale}")
+        st.write(f"- **Total de linhas na planilha:** {ws_s.max_row}")
+        st.write(f"- **Total de colunas:** {ws_s.max_column}")
+        st.write(f"- **Linha de cabeçalho informada:** {header_sinale}")
 
-elif menu_opcao == "ATUALIZAÇÃO DE DADOS - EXCLUSÃO DO TRABALHO":
-    st.title("🗑️ ATUALIZAÇÃO DE DADOS - EXCLUSÃO DO TRABALHO")
-    st.info("Módulo em desenvolvimento. Em breve estará disponível aqui no menu!")
+elif menu_opcao == "ATUALIZAR DADOS":
+    st.title("⚡ SINALE WEB - EM BUSCA DE AGILIDADE")
+    st.subheader("🔄 Atualizar Dados do SINALE")
+    st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para obter o arquivo atualizado. O formato deste arquivo é igual ao nosso arquivo de Destino da Opção 1.")
+    
+    sinale_file_upd = st.file_uploader("Selecione o arquivo do SINALE para atualizar (.xlsx)", type=["xlsx"], key="sinale_upd_upload")
+    header_upd = st.number_input("Linha do cabeçalho no arquivo SINALE:", value=11, min_value=1, key="hdr_sinale_upd")
+    
+    if sinale_file_upd:
+        wb_upd = load_workbook(sinale_file_upd)
+        sheet_upd = st.selectbox("Escolha a aba a ser tratada:", wb_upd.sheetnames, key="sheet_sinale_upd")
+        ws_u = wb_upd[sheet_upd]
+        
+        st.write("---")
+        st.write("Insira as correções ou ajustes necessários nos dados abaixo:")
+        
+        if st.button("🚀 Processar e Baixar Atualização"):
+            buffer = io.BytesIO()
+            wb_upd.save(buffer)
+            buffer.seek(0)
+            st.success("✅ Arquivo atualizado com sucesso!")
+            st.download_button("📥 Baixar Arquivo SINALE Atualizado", buffer.getvalue(), "sinale_atualizado_dados.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+elif menu_opcao == "LIMPAR ARQUIVO":
+    st.title("⚡ SINALE WEB - EM BUSCA DE AGILIDADE")
+    st.subheader("🧹 Limpar Arquivo do SINALE")
+    st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para obter o arquivo base. O formato deste arquivo é igual ao nosso arquivo de Destino da Opção 1. Esta rotina limpa os registros mantendo a estrutura e o cabeçalho.")
+    
+    sinale_file_clean = st.file_uploader("Selecione o arquivo do SINALE para limpeza (.xlsx)", type=["xlsx"], key="sinale_clean_upload")
+    header_clean = st.number_input("Linha do cabeçalho no arquivo SINALE:", value=11, min_value=1, key="hdr_sinale_clean")
+    
+    if sinale_file_clean:
+        wb_clean = load_workbook(sinale_file_clean)
+        sheet_clean = st.selectbox("Escolha a aba para limpeza:", wb_clean.sheetnames, key="sheet_sinale_clean")
+        ws_c = wb_clean[sheet_clean]
+        
+        if st.button("🗑️ Executar Limpeza e Baixar"):
+            # Remove todas as linhas abaixo do cabeçalho
+            if ws_c.max_row > header_clean:
+                ws_c.delete_rows(header_clean + 1, ws_c.max_row - header_clean)
+            
+            buffer = io.BytesIO()
+            wb_clean.save(buffer)
+            buffer.seek(0)
+            st.success("✅ Arquivo limpo com sucesso mantendo a estrutura!")
+            st.download_button("📥 Baixar Arquivo Limpo", buffer.getvalue(), "sinale_limpo.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
-    st.title("👷 SOMENTE TRABALHADORES ATIVOS")
+    st.title("⚡ SINALE WEB - EM BUSCA DE AGILIDADE")
+    st.subheader("👷 Somente Trabalhadores Ativos")
     st.info("Módulo em desenvolvimento. Em breve estará disponível aqui no menu!")
