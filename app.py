@@ -299,7 +299,6 @@ elif menu_opcao == "ATUALIZAR DADOS":
             sheet_upd = st.selectbox("Escolha a aba a ser tratada:", wb_upd.sheetnames, key="sheet_sinale_upd")
             ws_u = wb_upd[sheet_upd]
             
-            # Mapeamento robusto dos cabeçalhos e linhas físicas do Excel
             cabecalhos = {}
             for c_idx in range(1, ws_u.max_column + 1):
                 val = ws_u.cell(row=header_upd, column=c_idx).value
@@ -314,7 +313,6 @@ elif menu_opcao == "ATUALIZAR DADOS":
             if not lista_colunas:
                 st.error("Nenhuma coluna encontrada na linha de cabeçalho especificada!")
             else:
-                # Carregar dados atrelando a linha real do Excel
                 dados_tabela = []
                 for r in range(header_upd + 1, ws_u.max_row + 1):
                     row_data = {}
@@ -360,7 +358,7 @@ elif menu_opcao == "ATUALIZAR DADOS":
                 
                 st.write("---")
                 
-                if st.button("🚀 Processar Atualização e Baixar"):
+                if st.button("🚀 Processar Atualização", key="btn_proc_upd"):
                     if modo_atd_reg == "Selecionar registros específicos" and not linhas_excel_alvo:
                         st.error("Selecione ao menos um registro para atualizar!")
                     else:
@@ -375,9 +373,19 @@ elif menu_opcao == "ATUALIZAR DADOS":
                             
                             buffer = io.BytesIO()
                             wb_upd.save(buffer)
-                            buffer.seek(0)
-                            st.success(f"✅ {count_atualizados} registro(s) atualizado(s) com sucesso na coluna **{col_alvo_upd}**!")
-                            st.download_button("📥 Baixar Arquivo SINALE Atualizado", buffer.getvalue(), "sinale_atualizado_dados.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                            st.session_state["upd_file_bytes"] = buffer.getvalue()
+                            st.session_state["upd_success_msg"] = f"✅ {count_atualizados} registro(s) atualizado(s) com sucesso na coluna **{col_alvo_upd}**!"
+                
+                # --- EXIBIÇÃO PERSISTENTE DO BOTÃO DE DOWNLOAD ---
+                if "upd_file_bytes" in st.session_state:
+                    st.success(st.session_state["upd_success_msg"])
+                    st.download_button(
+                        "📥 Baixar Arquivo SINALE Atualizado", 
+                        st.session_state["upd_file_bytes"], 
+                        "sinale_atualizado_dados.xlsx", 
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="dl_btn_upd"
+                    )
         except Exception as e:
             st.error(f"Erro ao processar o arquivo para atualização: {e}")
 
