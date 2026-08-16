@@ -43,7 +43,7 @@ def extrair_valor_limpo(df, idx, col_name):
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Integrador Profissional", layout="wide")
-st.title("⚡ Integrador ==> Dados Gerais dos Internos --> SINALE")
+st.title("⚡ INTEGRADOR ==> Dados Gerais dos Internos >>> SINALE")
 
 # --- CARREGAMENTO ---
 col1, col2 = st.columns(2)
