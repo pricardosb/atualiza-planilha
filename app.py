@@ -109,7 +109,7 @@ if df_origem is not None and wb_data is not None:
     st.write("---")
 
     # --- 4. CORRELAÇÃO ORIGEM X DESTINO ---
-    st.subheader("4. Correlação ORIGEM X DESTINO")
+    st.subheader("4. CORRELAÇÃO ORIGEM X DESTINO")
     mapping = {}
     cols_ui = st.columns(4)
     opcoes_mapeamento = ["--- Não mapear ---", "⚠️ Auto-incrementar (Seq)"] + list(df_origem.columns)
@@ -123,9 +123,12 @@ if df_origem is not None and wb_data is not None:
 
     st.write("---")
 
-    # --- LOCAL DE INSERÇÃO ---
+    # --- 5. LOCAL DA ATUALIZAÇÃO ---
+    st.subheader("5. LOCAL DA ATUALIZAÇÃO")
     modo_insercao = st.radio("Local de inserção:", ["Final da planilha", "A partir de uma linha específica"])
     target_row = st.number_input("Linha:", min_value=header_dest+1, value=header_dest+1) if modo_insercao == "A partir de uma linha específica" else ws.max_row + 1
+
+    st.write("---")
 
     # --- PROCESSAMENTO ---
     if st.button("🚀 Processar e Atualizar"):
