@@ -3,19 +3,15 @@ import pandas as pd
 import streamlit as st
 
 st.set_page_config(page_title="Sistema de Gestão de Dados", layout="wide")
-st.title("⚡ Painel de Integração e Seleção")
+st.title("⚡ Painel de Integração (Excel, CSV e TXT)")
 
 col1, col2 = st.columns(2)
 with col1:
-    source_file = st.file_uploader("1. Enviar Arquivo de Origem", type=["xlsx", "xls", "csv"])
+    source_file = st.file_uploader("1. Enviar Arquivo de Origem", type=["xlsx", "xls", "csv", "txt"])
+    origem_sem_cabecalho = st.checkbox("O arquivo de origem NÃO tem cabeçalho", value=False)
+
 with col2:
     dest_file = st.file_uploader("2. Enviar Arquivo de Destino (Cabeçalho na linha 11)", type=["xlsx", "xls"])
-
-@st.cache_data(show_spinner=False)
-def ler_origem(file):
-    if file.name.lower().endswith(".csv"):
-        return pd.read_csv(file)
-    return pd.read_excel(file)
 
 @st.cache_data(show_spinner=False)
 def ler_destino(file):
@@ -25,12 +21,30 @@ def ler_destino(file):
 
 if source_file and dest_file:
     try:
-        # Garante que a base de dados da origem fica gravada na memória sem perder seleções
-        if "file_name" not in st.session_state or st.session_state["file_name"] != source_file.name:
-            raw_df = ler_origem(source_file)
+        header_val = None if origem_sem_cabecalho else 0
+        nome_arquivo = source_file.name.lower()
+        
+        # Leitor inteligente para Origem (suporta CSV, TXT e Excel)
+        if nome_arquivo.endswith(".csv"):
+            raw_df = pd.read_csv(source_file, header=header_val)
+        elif nome_arquivo.endswith(".txt"):
+            try:
+                raw_df = pd.read_csv(source_file, header=header_val, sep=None, engine='python')
+            except:
+                raw_df = pd.read_csv(source_file, header=header_val, sep='\t')
+        else:
+            raw_df = pd.read_excel(source_file, header=header_val)
+            
+        # Se não tiver cabeçalho, renomeia as colunas automaticamente
+        if origem_sem_cabecalho or raw_df.columns.dtype != 'O':
+            raw_df.columns = [f"Coluna {i+1}" for i in range(len(raw_df.columns))]
+
+        # Gerencia estado da sessão para manter as seleções
+        if "file_name" not in st.session_state or st.session_state["file_name"] != source_file.name or st.session_state.get("sem_cabecalho_antigo") != origem_sem_cabecalho:
             raw_df.insert(0, "Selecionar", False)
             st.session_state["source_df"] = raw_df
             st.session_state["file_name"] = source_file.name
+            st.session_state["sem_cabecalho_antigo"] = origem_sem_cabecalho
 
         sheet_names, all_dest_dfs = ler_destino(dest_file)
         
@@ -40,45 +54,54 @@ if source_file and dest_file:
         selected_sheet = st.selectbox("3. Escolha a Aba (Planilha) de Destino:", sheet_names)
         dest_df = all_dest_dfs[selected_sheet]
         
-        # --- Mapeamento (De/Para) ---
-        st.subheader("4. Mapeamento (Você escolhe o que cada campo do Destino recebe)")
+        # --- Mapeamento Inteligente (De/Para) ---
+        st.subheader("4. Mapeamento de Colunas (Destino x Origem)")
         mapping = {}
         source_cols = [c for c in st.session_state["source_df"].columns if c != "Selecionar"]
         
         for dest_col in dest_df.columns:
             if "Unnamed" in str(dest_col): continue
+            
+            default_idx = 0
+            for i, sc in enumerate(source_cols):
+                if str(dest_col).strip().upper() in str(sc).strip().upper():
+                    default_idx = i
+                    break
+            
             mapping[dest_col] = st.selectbox(
-                f"O campo '{dest_col}' do Destino recebe da Origem:", 
+                f"Destino '{dest_col}' recebe da Origem:", 
                 options=source_cols, 
+                index=default_idx,
                 key=f"map_{dest_col}"
             )
             
-        # --- Pesquisa e Seleção Instantânea ---
-        st.subheader("5. Selecionar Dados da Origem")
-        search = st.text_input("🔍 Pesquisa Instantânea (digite para filtrar a visualização):", "")
+        # --- Pesquisa Direta e Precisa ---
+        st.subheader("5. Pesquisa Direta na Origem")
+        
+        col_busca_1, col_busca_2 = st.columns([1, 2])
+        with col_busca_1:
+            coluna_pesquisa = st.selectbox("Pesquisar na coluna:", options=source_cols)
+        with col_busca_2:
+            search = st.text_input(f"🔍 Digite o termo para buscar em '{coluna_pesquisa}':", "")
         
         df_atual = st.session_state["source_df"]
         
         if search:
-            mask = df_atual.astype(str).apply(lambda row: row.str.contains(search, case=False, regex=False).any(), axis=1)
-            # Mostra o que deu match OU o que o usuário já marcou anteriormente
+            mask = df_atual[coluna_pesquisa].astype(str).str.contains(search, case=False, na=False)
             df_display = df_atual[mask | (df_atual["Selecionar"] == True)]
         else:
             df_display = df_atual
             
-        # Tabela interativa para seleção
         edited_df = st.data_editor(df_display, use_container_width=True, hide_index=True, key="editor_origem")
         
-        # Sincroniza as marcações feitas na tela com a memória principal
         for idx in edited_df.index:
             st.session_state["source_df"].loc[idx, "Selecionar"] = edited_df.loc[idx, "Selecionar"]
             
-        # Conta quantos foram marcados no total geral
         final_selected = st.session_state["source_df"][st.session_state["source_df"]["Selecionar"] == True]
         st.write(f"📌 Total de registros marcados para envio: **{len(final_selected)}**")
         
         # --- Inserção ---
-        st.subheader("6. Finalizar")
+        st.subheader("6. Finalizar e Inserir no Destino")
         mode = st.radio("Onde salvar?", ["Final do arquivo", "Em uma linha específica"])
         target_line = 0
         if mode == "Em uma linha específica":
@@ -111,4 +134,4 @@ if source_file and dest_file:
                 st.download_button("📥 Baixar Planilha Atualizada", data=buffer.getvalue(), file_name="arquivo_final.xlsx")
 
     except Exception as e:
-        st.error(f"Ocorreu um erro: {e}")
+        st.error(f"Ocorreu um erro ao processar o arquivo de Origem: {e}")
