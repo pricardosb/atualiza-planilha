@@ -195,6 +195,7 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
 
 # --- OPÇÃO 2 ---
 # --- OPÇÃO 2: ATUALIZAÇÕES GERAIS ---
+# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS ---
 elif menu_opcao == "ATUALIZAÇÕES GERAIS":
     titulo_estilizado("Atualizações Gerais")
     
@@ -232,11 +233,9 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         
         cols_btns = st.columns([1, 1, 4])
         with cols_btns[0]:
-            if st.button("✅ Marcar Todos"): 
-                st.session_state['select_all'] = True; st.rerun()
+            if st.button("✅ Marcar Todos"): st.session_state['select_all'] = True; st.rerun()
         with cols_btns[1]:
-            if st.button("❌ Desmarcar Todos"): 
-                st.session_state['select_all'] = False; st.rerun()
+            if st.button("❌ Desmarcar Todos"): st.session_state['select_all'] = False; st.rerun()
         
         # --- EDITOR ---
         st.subheader("✏️ Seleção para Atualizar")
@@ -255,6 +254,12 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         
         if not selecionados.empty:
             col_target = st.selectbox("Selecione a coluna que deseja alterar:", df.columns, key="col_target_op2")
+            
+            # --- MOSTRAR VALOR ANTIGO (RESTAURADO) ---
+            valores_antigos_str = ", ".join([str(v) for v in selecionados[col_target].dropna().unique()])
+            if not valores_antigos_str: valores_antigos_str = "Vazio"
+            st.info(f"📌 **Valor(es) atual(is) / antigo(s)** no campo **'{col_target}'** para os registros selecionados: **{valores_antigos_str}**")
+            
             novo_val = st.text_input("Digite o novo valor (Data, Número ou Texto):", key="novo_val_op2")
             
             if st.button("➕ Adicionar à Fila de Modificações", key="btn_add_fila"):
@@ -262,19 +267,21 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                     "indices": selecionados.index.tolist(),
                     "coluna": col_target,
                     "novo_valor": novo_val,
-                    "valor_antigo": ", ".join([str(v) for v in selecionados[col_target].dropna().unique()]),
+                    "valor_antigo": valores_antigos_str,
                     "vl_busca": ", ".join(filtro_vals) if filtro_vals else "Todos",
                     "aba": target_sheet
                 })
-                st.session_state['novo_val_op2'] = "" # Limpa o campo
+                # Limpa o campo após adicionar
+                st.session_state['novo_val_op2'] = "" 
                 st.success("Modificação adicionada à fila!"); st.rerun()
 
+        # Exibição da fila e download...
         if st.session_state['fila_modificacoes']:
             st.markdown("---")
             st.subheader("📋 Fila de Modificações Pendentes")
-            # [Lógica da tabela da fila e botão de download permanece igual...]
             file_bytes = gerar_arquivo_atualizado_bytes(io.BytesIO(st.session_state["wb_data"]), header, st.session_state['fila_modificacoes'], df, sheet_name=target_sheet)
             st.download_button("📥 Baixar Arquivo Atualizado", file_bytes, "sinale_atualizado_final.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            
 # --- OPÇÕES 3, 4 e 5 ---
 elif menu_opcao == "GERAR RELATORIOS":
     titulo_estilizado("Gerar Relatórios")
