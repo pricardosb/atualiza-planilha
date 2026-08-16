@@ -67,26 +67,41 @@ def gerar_arquivo_atualizado_bytes(uploaded_file, header, fila, df_original):
     ws = wb[wb.sheetnames[0]]
     
     red_font = Font(color="FF0000")
-    rem_col_idx = None
+    
+    # Mapeamento de colunas (normalizadas)
+    col_indices = {}
     for idx_c, c_name in enumerate(df_original.columns):
-        if str(c_name).strip().upper() == 'REM':
-            rem_col_idx = idx_c + 1
-            break
-            
+        c_norm = str(c_name).strip().upper()
+        col_indices[c_norm] = idx_c + 1
+        
+    rem_col_idx = col_indices.get('REM')
+    salario_col_idx = col_indices.get('SALARIO') or col_indices.get('SALÁRIO')
+    falta_col_idx = col_indices.get('FALTA') or col_indices.get('FALTAS')
+    peculio_col_idx = col_indices.get('PECULIO') or col_indices.get('PECÚLIO')
+    
+    modified_cols_by_row = {}
+    
+    # 1. Aplicar modificações da fila
     for mod in fila:
         col_target = mod["coluna"]
         novo_val = mod["novo_valor"]
         valor_convertido = converter_valor_inteligente(novo_val, df_original[col_target].dtype)
         
-        is_rz = col_target.strip().upper() in ['RZ', 'R.Z.']
-        is_saida = col_target.strip().upper() in ['SAIDA', 'SAÍDA']
+        col_target_norm = col_target.strip().upper()
+        is_rz = col_target_norm in ['RZ', 'R.Z.']
+        is_saida = col_target_norm in ['SAIDA', 'SAÍDA']
         
         for idx in mod["indices"]:
+            if idx not in modified_cols_by_row:
+                modified_cols_by_row[idx] = set()
+            modified_cols_by_row[idx].add(col_target_norm)
+            
             excel_row = idx + header + 1
             col_alvo_idx = df_original.columns.get_loc(col_target) + 1
             
             ws.cell(row=excel_row, column=col_alvo_idx, value=valor_convertido)
             
+            # Regra RZ -> REM
             if is_rz and rem_col_idx is not None:
                 try:
                     num_rz = float(str(valor_convertido).replace(',', '.'))
@@ -96,6 +111,7 @@ def gerar_arquivo_atualizado_bytes(uploaded_file, header, fila, df_original):
                 except:
                     pass
                     
+            # Regra SAÍDA -> Linha vermelha
             if is_saida:
                 for c_idx in range(1, ws.max_column + 1):
                     cell_obj = ws.cell(row=excel_row, column=c_idx)
@@ -105,6 +121,31 @@ def gerar_arquivo_atualizado_bytes(uploaded_file, header, fila, df_original):
                     else:
                         cell_obj.font = red_font
                         
+    # 2. Aplicar regra do PECÚLIO para linhas onde o SALÁRIO foi atualizado
+    if peculio_col_idx is not None and salario_col_idx is not None:
+        for idx, cols_mod in modified_cols_by_row.items():
+            if any(c in ['SALARIO', 'SALÁRIO'] for c in cols_mod):
+                excel_row = idx + header + 1
+                sal_val_cell = ws.cell(row=excel_row, column=salario_col_idx).value
+                try:
+                    salario = float(str(sal_val_cell).replace(',', '.'))
+                except:
+                    salario = 0.0
+                
+                falta_atualizada = any(c in ['FALTA', 'FALTAS'] for c in cols_mod)
+                
+                if falta_atualizada and falta_col_idx is not None:
+                    falta_val_cell = ws.cell(row=excel_row, column=falta_col_idx).value
+                    try:
+                        falta = float(str(falta_val_cell).replace(',', '.'))
+                    except:
+                        falta = 0.0
+                    peculio = (salario - falta) * 0.25
+                else:
+                    peculio = salario * 0.25
+                    
+                ws.cell(row=excel_row, column=peculio_col_idx, value=peculio)
+
     buffer = io.BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
@@ -267,7 +308,7 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
             st.subheader("📋 Fila de Modificações Pendentes")
             
             df_fila_resumo = pd.DataFrame([
-                {"Qtd Registros": len(item["indices"]), "Coluna": item["coluna"], "Novo Valor": item["novo_valor"]}
+                {"Qtd Registros": len(item["indices"]), "Campo Modificado": item["coluna"], "Novo Valor": item["novo_valor"]}
                 for item in st.session_state['fila_modificacoes']
             ])
             st.dataframe(df_fila_resumo, use_container_width=True)
@@ -278,7 +319,6 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                     st.session_state['fila_modificacoes'] = []
                     st.rerun()
             with col_f2:
-                # Gera o arquivo atualizado automaticamente ao renderizar o botão de download
                 file_bytes = gerar_arquivo_atualizado_bytes(sinale_file, header, st.session_state['fila_modificacoes'], df)
                 st.download_button(
                     label="📥 Baixar Arquivo Atualizado",
