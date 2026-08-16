@@ -174,14 +174,7 @@ menu_opcao = st.sidebar.radio("Selecione a rotina:", [
 if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
     titulo_estilizado("INTEGRADOR ==> DADOS GERAIS DO INTERNO >>> SINALE")
     
-    if st.checkbox("🗑️ Descartar dados da memória e carregar novos arquivos", value=False, key="desc_op1"):
-        st.session_state['source_df'] = None
-        st.session_state['wb_data'] = None
-        st.session_state['last_dest_name'] = None
-        st.session_state['fila_modificacoes'] = []
-        st.success("Memória limpa com sucesso! Faça o upload dos novos arquivos abaixo.")
-        st.rerun()
-
+   
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("1. Arquivo de ORIGEM")
