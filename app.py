@@ -265,6 +265,9 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
 
             for idx in selected_indices:
                 seq_val += 1
+                # CORREÇÃO AQUI: Atualiza dinamicamente para copiar a formatação da linha imediatamente anterior
+                ref_row_idx = current_row - 1
+                
                 for col_idx in range(1, ws.max_column + 1):
                     target_cell = ws.cell(row=current_row, column=col_idx)
                     ref_cell = ws.cell(row=ref_row_idx, column=col_idx)
@@ -315,7 +318,6 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
             st.rerun()
 
     if st.session_state.get("wb_data") is not None:
-        # Seleção da aba do arquivo carregado
         wb_temp = load_workbook(io.BytesIO(st.session_state["wb_data"]), data_only=True)
         target_sheet = st.selectbox("Escolha a ABA do arquivo para trabalhar:", wb_temp.sheetnames, key="aba_op2")
         
@@ -355,7 +357,6 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         if not selecionados.empty:
             col_target = st.selectbox("Selecione a coluna que deseja alterar:", df.columns, key="col_target_op2")
             
-            # MOSTRA O VALOR ANTIGO ANTES DE DIGITAR O NOVO VALOR
             valores_antigos_str = ", ".join([str(v) for v in selecionados[col_target].dropna().unique()])
             if not valores_antigos_str:
                 valores_antigos_str = "Vazio"
