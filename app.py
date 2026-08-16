@@ -1,9 +1,11 @@
 import io
 import pandas as pd
+import numpy as np
 import streamlit as st
 from openpyxl import load_workbook
 from copy import copy
 
+# --- FUNÇÕES DE SUPORTE ---
 def copiar_estilo_completo(origem, destino):
     if origem.has_style:
         destino.font = copy(origem.font)
@@ -13,10 +15,37 @@ def copiar_estilo_completo(origem, destino):
         destino.protection = copy(origem.protection)
         destino.alignment = copy(origem.alignment)
 
+def deduplicar_colunas(colunas):
+    vistos = {}
+    novas_colunas = []
+    for col in colunas:
+        col_str = str(col).strip()
+        if col_str in vistos:
+            vistos[col_str] += 1
+            novas_colunas.append(f"{col_str} ({vistos[col_str]})")
+        else:
+            vistos[col_str] = 1
+            novas_colunas.append(col_str)
+    return novas_colunas
+
+def extrair_valor_limpo(df, idx, col_name):
+    try:
+        val = df.iloc[idx][col_name]
+        if isinstance(val, pd.Series):
+            val = val.iloc[0]
+        if pd.isna(val):
+            return None
+        if hasattr(val, 'item'):
+            val = val.item()
+        return val
+    except Exception:
+        return None
+
+# --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Integrador Profissional", layout="wide")
 st.title("⚡ Integrador Profissional")
 
-# --- CARREGAMENTO COM PERSISTÊNCIA ---
+# --- CARREGAMENTO ---
 col1, col2 = st.columns(2)
 with col1:
     source_file = st.file_uploader("1. Arquivo de ORIGEM", type=["xlsx", "xls", "csv", "txt"])
@@ -41,8 +70,10 @@ if source_file:
                     break
                 except: continue
         if raw is not None:
-            if not origem_tem_cabecalho: raw.columns = [f"Col {i+1}" for i in range(len(raw.columns))]
-            else: raw.columns = [str(c).strip() for c in raw.columns]
+            if not origem_tem_cabecalho: 
+                raw.columns = [f"Col {i+1}" for i in range(len(raw.columns))]
+            else: 
+                raw.columns = deduplicar_colunas(raw.columns)
             st.session_state["source_df"] = raw
             st.session_state["last_cache_key_src"] = cache_key_src
 
@@ -58,8 +89,9 @@ wb_data = st.session_state.get("wb_data")
 
 if df_origem is not None and wb_data is not None:
     wb = load_workbook(io.BytesIO(wb_data))
-    # Descrição alterada conforme solicitado
-    target_sheet = st.selectbox("Escolha a ABA na Planilha de Destino:", wb.sheetnames)
+    
+    # Descrição atualizada
+    target_sheet = st.selectbox("Escolha a ABA na Planilha de Destino a ser Atualizada:", wb.sheetnames)
     ws = wb[target_sheet]
 
     st.subheader("3. Seleção e Mapeamento")
@@ -89,48 +121,46 @@ if df_origem is not None and wb_data is not None:
     if st.button("🚀 Processar e Atualizar"):
         if not selected_indices: st.error("Selecione itens!"); st.stop()
         
-        # 1. Preparar o cálculo da sequência inicial
+        # 1. Preparação: Ler último valor da sequência
         ref_row_idx = (target_row - 1) if modo_insercao == "A partir de uma linha específica" else (ws.max_row)
         
         base_seq = 0
         if ref_row_idx >= header_dest:
+            # Tenta pegar valor da primeira coluna como base
             val_acima = ws.cell(row=ref_row_idx, column=1).value
             try:
                 base_seq = int(val_acima)
             except:
                 base_seq = 0
         
-        # 2. Inserir linhas se for no meio
+        # 2. Inserção
         if modo_insercao == "A partir de uma linha específica":
             ws.insert_rows(target_row, amount=len(selected_indices))
         
-        # 3. Escrever dados
+        # 3. Gravação
         current_row = target_row
         seq_val = base_seq
 
         for idx in selected_indices:
             seq_val += 1
-            # Itera por TODAS as colunas da planilha para garantir limpeza das não mapeadas
             for col_idx in range(1, ws.max_column + 1):
                 target_cell = ws.cell(row=current_row, column=col_idx)
                 ref_cell = ws.cell(row=ref_row_idx, column=col_idx)
                 
-                # Copia estilo da linha anterior (ou cabeçalho)
                 copiar_estilo_completo(ref_cell, target_cell)
                 
-                # Define valor (ou limpa se não mapeado)
                 if col_idx in mapping:
                     origem_col = mapping[col_idx]
                     if origem_col == "⚠️ Auto-incrementar (Seq)":
                         target_cell.value = seq_val
                     else:
-                        target_cell.value = df_origem.iloc[idx][origem_col]
+                        target_cell.value = extrair_valor_limpo(df_origem, idx, origem_col)
                 else:
-                    target_cell.value = None # <--- LIMPA CÉLULAS NÃO MAPEADAS
+                    target_cell.value = None # Limpa colunas não mapeadas
             
             current_row += 1
 
-        # 4. Re-sequenciamento (corrige sequência abaixo caso tenha inserido no meio)
+        # 4. Re-sequenciamento
         if modo_insercao == "A partir de uma linha específica":
             for r in range(current_row, ws.max_row + 1):
                 val_atual = ws.cell(row=r, column=1).value
@@ -141,5 +171,5 @@ if df_origem is not None and wb_data is not None:
         buffer = io.BytesIO()
         wb.save(buffer)
         buffer.seek(0)
-        st.success("✅ Processamento concluído!")
+        st.success("✅ Processamento concluído com sucesso!")
         st.download_button("📥 Baixar Arquivo Atualizado", buffer.getvalue(), "destino_atualizado.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
