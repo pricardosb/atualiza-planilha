@@ -1,9 +1,10 @@
 import io
 import pandas as pd
 import streamlit as st
+from openpyxl import load_workbook
 
-st.set_page_config(page_title="Integrador XLS Profissional", layout="wide")
-st.title("⚡ Integrador XLS: Origem com/sem Cabeçalho")
+st.set_page_config(page_title="Integrador Profissional", layout="wide")
+st.title("⚡ Integrador: Edição Precisa de Planilhas")
 
 # --- 1. CARREGAMENTO DOS ARQUIVOS ---
 col1, col2 = st.columns(2)
@@ -11,11 +12,11 @@ with col1:
     source_file = st.file_uploader("1. Arquivo de ORIGEM (Excel, CSV ou TXT)", type=["xlsx", "xls", "csv", "txt"])
     origem_tem_cabecalho = st.checkbox("O arquivo de ORIGEM tem cabeçalho na 1ª linha?", value=True)
 with col2:
-    dest_file = st.file_uploader("2. Arquivo de DESTINO (.xls)", type=["xls", "xlsx"])
+    dest_file = st.file_uploader("2. Arquivo de DESTINO (.xlsx)", type=["xlsx"])
     header_dest = st.number_input("Linha do cabeçalho no Destino:", value=11, min_value=1)
 
 if source_file and dest_file:
-    # --- LEITURA DA ORIGEM (COM OU SEM CABEÇALHO) ---
+    # --- LEITURA DA ORIGEM ---
     cache_key = f"{source_file.name}_{origem_tem_cabecalho}"
     if "source_df" not in st.session_state or st.session_state.get("last_cache_key") != cache_key:
         try:
@@ -27,7 +28,6 @@ if source_file and dest_file:
             else: 
                 raw = pd.read_excel(source_file, header=hdr)
             
-            # Se não tem cabeçalho, cria nomes genéricos para as colunas
             if not origem_tem_cabecalho:
                 raw.columns = [f"Coluna {i+1}" for i in range(len(raw.columns))]
                 
@@ -39,15 +39,15 @@ if source_file and dest_file:
     
     df_origem = st.session_state["source_df"]
 
-    # --- LEITURA DO DESTINO (PRESERVANDO TUDO ACIMA DO CABEÇALHO) ---
+    # --- LEITURA DO DESTINO COM OPENPYXL (PRESERVA TUDO) ---
     try:
-        all_sheets_raw = pd.read_excel(dest_file, sheet_name=None, header=None)
-        sheet_names = list(all_sheets_raw.keys())
+        dest_file.seek(0)
+        wb = load_workbook(io.BytesIO(dest_file.getvalue()))
+        sheet_names = wb.sheetnames
         target_sheet = st.selectbox("3. Escolha a ABA (Pasta) de Destino:", sheet_names)
-        
-        sheet_df = all_sheets_raw[target_sheet]
+        ws = wb[target_sheet]
     except Exception as e:
-        st.error(f"Erro ao ler o arquivo de destino: {e}")
+        st.error(f"Erro ao carregar arquivo de destino: {e}")
         st.stop()
 
     # --- 2. PESQUISA ORDENADA COM CONTAGEM ---
@@ -65,11 +65,9 @@ if source_file and dest_file:
     # --- 3. MAPEAMENTO MANUAL ---
     st.subheader("5. Mapeamento de Colunas (Origem x Destino)")
     
-    header_row_idx = header_dest - 1
-    header_values = sheet_df.iloc[header_row_idx].tolist()
-    
-    dest_cols_map = {str(val): i for i, val in enumerate(header_values) if pd.notna(val) and "Unnamed" not in str(val)}
-    dest_cols = list(dest_cols_map.keys())
+    header_cells = ws[header_dest]
+    dest_cols = [cell.value for cell in header_cells if cell.value is not None]
+    col_name_to_idx = {cell.value: cell.column for cell in header_cells if cell.value is not None}
     
     mapping = {}
     cols_ui = st.columns(3)
@@ -88,53 +86,42 @@ if source_file and dest_file:
     if modo_insercao == "A partir de uma linha específica":
         target_row = st.number_input(f"Digite o número da linha exata (Mínimo {min_linha_val}):", min_value=min_linha_val, value=min_linha_val)
 
-    # --- 5. PROCESSAMENTO E GERAÇÃO DO ARQUIVO .XLS ---
+    # --- 5. PROCESSAMENTO E GERAÇÃO DO ARQUIVO ---
     st.subheader("7. Finalizar Processo")
-    if st.button("🚀 Processar e Gerar Arquivo XLS"):
+    if st.button("🚀 Processar e Atualizar Destino"):
         if not selected_indices:
             st.error("⚠️ Você precisa selecionar pelo menos um registro na pesquisa acima!")
         elif not mapping:
             st.error("⚠️ Faça pelo menos um mapeamento de colunas!")
         else:
             try:
-                top_rows = sheet_df.iloc[:header_row_idx].copy()      
-                header_df = sheet_df.iloc[[header_row_idx]].copy()    
-                data_rows = sheet_df.iloc[header_row_idx + 1:].copy()  
-                
-                dados_selecionados = df_origem.iloc[selected_indices]
-                new_rows_df = pd.DataFrame(columns=sheet_df.columns)
-                
-                for _, src_row in dados_selecionados.iterrows():
-                    new_row_data = {}
-                    for dest_col, orig_col in mapping.items():
-                        col_idx = dest_cols_map[dest_col]
-                        new_row_data[col_idx] = src_row[orig_col]
-                    new_rows_df = pd.concat([new_rows_df, pd.DataFrame([new_row_data])], ignore_index=True)
+                dados_para_inserir = df_origem.iloc[selected_indices]
                 
                 if modo_insercao == "Final da planilha":
-                    final_data = pd.concat([data_rows, new_rows_df], ignore_index=True)
+                    start_row = ws.max_row + 1
                 else:
-                    rel_idx = target_row - (header_row_idx + 2)
-                    rel_idx = max(0, min(rel_idx, len(data_rows)))
-                    
-                    part1 = data_rows.iloc[:rel_idx]
-                    part2 = data_rows.iloc[rel_idx:]
-                    final_data = pd.concat([part1, new_rows_df, part2], ignore_index=True)
+                    start_row = target_row
+                    # Abre espaço exato na linha desejada sem apagar títulos ou formatações superiores
+                    ws.insert_rows(start_row, amount=len(dados_para_inserir))
                 
-                updated_sheet_df = pd.concat([top_rows, header_df, final_data], ignore_index=True)
-                all_sheets_raw[target_sheet] = updated_sheet_df
+                current_row = start_row
+                for _, row in dados_para_inserir.iterrows():
+                    for dest_col, orig_col in mapping.items():
+                        if dest_col in col_name_to_idx:
+                            col_idx = col_name_to_idx[dest_col]
+                            ws.cell(row=current_row, column=col_idx, value=row[orig_col])
+                    current_row += 1
                 
                 buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine='xlwt') as writer:
-                    for s_name, s_df in all_sheets_raw.items():
-                        s_df.to_excel(writer, sheet_name=s_name, index=False, header=False)
+                wb.save(buffer)
+                buffer.seek(0)
                 
-                st.success("✅ Arquivo XLS processado com sucesso!")
+                st.success("✅ Arquivo atualizado com sucesso mantendo toda a estrutura e títulos!")
                 st.download_button(
-                    "📥 Baixar Arquivo Atualizado (.xls)", 
+                    "📥 Baixar Arquivo Atualizado", 
                     data=buffer.getvalue(), 
-                    file_name="destino_atualizado.xls",
-                    mime="application/vnd.ms-excel"
+                    file_name="destino_atualizado.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
             except Exception as e:
                 st.error(f"Erro ao processar os dados: {e}")
