@@ -256,31 +256,41 @@ elif menu_opcao == "INFORMAÇÕES GERAIS":
             st.write(f"- **Linha de cabeçalho:** {header_sinale}")
             
             st.write("---")
-            st.subheader("🔍 Pesquisa e Seleção de Registros")
-            col_busca_info = st.selectbox("Coluna identificadora para busca:", df_info.columns, key="col_busca_info")
+            st.subheader("👁️ 1. Escolha dos Campos (Colunas) para Visualizar")
+            colunas_selecionadas = st.multiselect(
+                "Selecione quais colunas deseja exibir:",
+                options=list(df_info.columns),
+                default=list(df_info.columns),
+                key="cols_sel_info"
+            )
             
-            opcoes_selecao_info = [f"{val} (Linha {idx})" for idx, val in df_info[col_busca_info].items()]
-            selected_options_info = st.multiselect("🔍 Escolha/Pesquise os registros:", opcoes_selecao_info, key="sel_opts_info")
-            selected_indices_info = [int(item.split("(Linha ")[1].replace(")", "")) for item in selected_options_info]
-
-            if selected_indices_info:
-                st.info(f"📊 **{len(selected_indices_info)}** registro(s) selecionado(s).")
-                
-                st.subheader("👁️ Seleção de Colunas para Exibição")
-                colunas_selecionadas = st.multiselect(
-                    "Escolha quais colunas deseja visualizar nos registros selecionados:",
-                    options=list(df_info.columns),
-                    default=list(df_info.columns),
-                    key="cols_sel_info"
-                )
-                
-                if colunas_selecionadas:
-                    df_filtrado = df_info.loc[selected_indices_info, colunas_selecionadas]
-                    st.dataframe(df_filtrado, use_container_width=True)
-                else:
-                    st.warning("Selecione pelo menos uma coluna para visualizar os dados.")
+            st.subheader("🔍 2. Pesquisa e Filtro de Registros")
+            tipo_busca = st.radio("Modo de busca:", ["Pesquisa por Texto Livre", "Seleção por Coluna Específica"], horizontal=True, key="tipo_busca_info")
+            
+            df_trabalho = df_info.copy()
+            if colunas_selecionadas:
+                df_trabalho = df_trabalho[colunas_selecionadas]
+            
+            if tipo_busca == "Pesquisa por Texto Livre":
+                termo_busca = st.text_input("Digite o termo para pesquisar (nome, ID, etc.):", key="termo_busca_livre")
+                if termo_busca:
+                    mask = df_trabalho.astype(str).apply(lambda x: x.str.contains(termo_busca, case=False, na=False)).any(axis=1)
+                    df_trabalho = df_trabalho[mask]
+                    st.info(f"🔍 Encontrados **{len(df_trabalho)}** registro(s) correspondentes.")
             else:
-                st.info("💡 Selecione um ou mais registros acima para pesquisar e visualizar os detalhes.")
+                col_busca_especifica = st.selectbox("Escolha a coluna para busca:", colunas_selecionadas, key="col_busca_esp")
+                valores_unicos = df_info[col_busca_especifica].dropna().unique()
+                valores_escolhidos = st.multiselect("Selecione os valores:", options=valores_unicos, key="val_escolhidos_esp")
+                if valores_escolhidos:
+                    df_trabalho = df_trabalho[df_info[col_busca_especifica].isin(valores_escolhidos)]
+                    st.info(f"📊 Encontrados **{len(df_trabalho)}** registro(s) para os valores selecionados.")
+            
+            st.subheader("📋 Resultados da Pesquisa e Campos Selecionados")
+            if colunas_selecionadas:
+                st.dataframe(df_trabalho, use_container_width=True)
+            else:
+                st.warning("Selecione pelo menos uma coluna para visualizar os dados.")
+                
         except Exception as e:
             st.error(f"Erro ao processar a planilha selecionada: {e}")
 
