@@ -5,34 +5,55 @@ from openpyxl import load_workbook
 from copy import copy
 
 st.set_page_config(page_title="Integrador Profissional", layout="wide")
-st.title("⚡ Integrador: Herança de Estilos Universal e Inserção Precisa")
+st.title("⚡ Integrador: Leitura Automática de Qualquer Formato")
 
 # --- 1. CARREGAMENTO DOS ARQUIVOS ---
 col1, col2 = st.columns(2)
 with col1:
-    source_file = st.file_uploader("1. Arquivo de ORIGEM", type=["xlsx", "xls", "csv", "txt"])
+    source_file = st.file_uploader("1. Arquivo de ORIGEM (Excel, CSV ou TXT)", type=["xlsx", "xls", "csv", "txt"])
     origem_tem_cabecalho = st.checkbox("Origem tem cabeçalho?", value=True)
 with col2:
     dest_file = st.file_uploader("2. Arquivo de DESTINO (.xlsx)", type=["xlsx"])
     header_dest = st.number_input("Linha do cabeçalho no Destino:", value=11, min_value=1)
 
 if source_file and dest_file:
-    # --- LEITURA DA ORIGEM (COM CACHE) ---
+    # --- LEITURA DA ORIGEM INTELIGENTE (DETECTA QUALQUER FORMATO) ---
     cache_key_src = f"{source_file.name}_{origem_tem_cabecalho}"
     if "source_df" not in st.session_state or st.session_state.get("last_cache_key_src") != cache_key_src:
         hdr = 0 if origem_tem_cabecalho else None
-        if source_file.name.endswith('.xlsx'): 
-            raw = pd.read_excel(source_file, header=hdr)
-        elif source_file.name.endswith('.csv'): 
-            raw = pd.read_csv(source_file, header=hdr)
-        else: 
-            raw = pd.read_csv(source_file, sep=None, engine='python', header=hdr)
+        raw = None
         
+        try:
+            # Tenta ler como Excel primeiro (.xlsx, .xls, .xlsm)
+            source_file.seek(0)
+            raw = pd.read_excel(source_file, header=hdr)
+        except Exception:
+            # Se falhar, é porque é um arquivo de texto/CSV/TXT. Vamos testar as codificações (UTF-8, Latin1, etc.)
+            encodings = ['utf-8', 'latin1', 'cp1252', 'iso-8859-1']
+            file_name_lower = source_file.name.lower()
+            
+            for enc in encodings:
+                try:
+                    source_file.seek(0)
+                    if file_name_lower.endswith('.csv'):
+                        raw = pd.read_csv(source_file, header=hdr, encoding=enc)
+                    else:
+                        # Para .txt ou arquivos com delimitadores variados
+                        raw = pd.read_csv(source_file, sep=None, engine='python', header=hdr, encoding=enc)
+                    break
+                except Exception:
+                    continue
+                    
+        if raw is None:
+            st.error("❌ Não foi possível ler o arquivo de origem. Verifique se o arquivo está corrompido.")
+            st.stop()
+            
         if not origem_tem_cabecalho:
             raw.columns = [f"Col {i+1}" for i in range(len(raw.columns))]
             
         st.session_state["source_df"] = raw
         st.session_state["last_cache_key_src"] = cache_key_src
+        
     df_origem = st.session_state["source_df"]
 
     # --- 2. SELEÇÃO DOS DADOS COM CONTADOR ---
@@ -91,7 +112,6 @@ if source_file and dest_file:
                 ws_write = wb_write[target_sheet]
                 num_new = len(selected_indices)
                 
-                # Define a linha inicial e abre espaço se for no meio
                 if modo_insercao == "Final da planilha":
                     start_row = ws_write.max_row + 1
                     try:
@@ -106,7 +126,6 @@ if source_file and dest_file:
                     except:
                         base_seq = 0
 
-                # Linha de referência para copiar a formatação (sempre pega a linha imediatamente anterior)
                 ref_row_idx = start_row - 1 if start_row > header_dest + 1 else header_dest + 1
                 if ref_row_idx < header_dest + 1:
                     ref_row_idx = header_dest + 1
@@ -114,7 +133,6 @@ if source_file and dest_file:
                 current_row = start_row
                 seq_val = base_seq
 
-                # Loop de escrita dos novos registros com herança de estilos ativa para qualquer local
                 for idx in selected_indices:
                     seq_val += 1
                     for col_idx, origem_col in mapping.items():
@@ -125,7 +143,6 @@ if source_file and dest_file:
                         
                         target_cell = ws_write.cell(row=current_row, column=col_idx, value=cell_val)
                         
-                        # Copia formatação da linha anterior em qualquer caso de inserção
                         ref_cell = ws_write.cell(row=ref_row_idx, column=col_idx)
                         if ref_cell.font: target_cell.font = copy(ref_cell.font)
                         if ref_cell.border: target_cell.border = copy(ref_cell.border)
@@ -135,7 +152,6 @@ if source_file and dest_file:
                             
                     current_row += 1
 
-                # Atualiza a sequência de todas as linhas abaixo caso tenha inserido no meio
                 if modo_insercao == "A partir de uma linha específica":
                     next_seq = seq_val
                     for r in range(start_row + num_new, ws_write.max_row + 1):
