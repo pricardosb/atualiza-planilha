@@ -5,7 +5,7 @@ from openpyxl import load_workbook
 from copy import copy
 
 st.set_page_config(page_title="Integrador Profissional", layout="wide")
-st.title("⚡ Integrador: Seleção e Mapeamento")
+st.title("⚡ Integrador: Herança de Estilos Universal e Inserção Precisa")
 
 # --- 1. CARREGAMENTO DOS ARQUIVOS ---
 col1, col2 = st.columns(2)
@@ -17,31 +17,45 @@ with col2:
     header_dest = st.number_input("Linha do cabeçalho no Destino:", value=11, min_value=1)
 
 if source_file and dest_file:
-    # --- LEITURA DA ORIGEM ---
-    if "source_df" not in st.session_state:
+    # --- LEITURA DA ORIGEM (COM CACHE) ---
+    cache_key_src = f"{source_file.name}_{origem_tem_cabecalho}"
+    if "source_df" not in st.session_state or st.session_state.get("last_cache_key_src") != cache_key_src:
         hdr = 0 if origem_tem_cabecalho else None
-        df_origem = pd.read_excel(source_file) if source_file.name.endswith('.xlsx') else pd.read_csv(source_file, header=hdr)
-        st.session_state["source_df"] = df_origem
+        if source_file.name.endswith('.xlsx'): 
+            raw = pd.read_excel(source_file, header=hdr)
+        elif source_file.name.endswith('.csv'): 
+            raw = pd.read_csv(source_file, header=hdr)
+        else: 
+            raw = pd.read_csv(source_file, sep=None, engine='python', header=hdr)
+        
+        if not origem_tem_cabecalho:
+            raw.columns = [f"Col {i+1}" for i in range(len(raw.columns))]
+            
+        st.session_state["source_df"] = raw
+        st.session_state["last_cache_key_src"] = cache_key_src
     df_origem = st.session_state["source_df"]
 
-    # --- 2. SELEÇÃO DOS DADOS (Onde você escolhe o que transferir) ---
+    # --- 2. SELEÇÃO DOS DADOS COM CONTADOR ---
     st.subheader("3. Seleção de Dados da Origem")
     col_busca = st.selectbox("Coluna para identificar os registros:", df_origem.columns)
     
-    # Cria uma lista formatada para o multiselect
     opcoes = [f"{val} (Linha {idx})" for idx, val in df_origem[col_busca].items()]
     selected_options = st.multiselect("🔍 Escolha os registros que deseja enviar:", opcoes)
     
-    # Extrai os índices das linhas selecionadas
     selected_indices = [int(item.split("(Linha ")[1].replace(")", "")) for item in selected_options]
+    st.metric("Total de itens selecionados", len(selected_indices))
 
-    # --- LEITURA DO DESTINO ---
-    dest_file.seek(0)
-    wb = load_workbook(io.BytesIO(dest_file.getvalue()), data_only=True)
+    # --- LEITURA DO DESTINO (COM CACHE) ---
+    if "dest_wb" not in st.session_state or st.session_state.get("last_cache_key_dest") != dest_file.name:
+        dest_file.seek(0)
+        st.session_state["dest_wb"] = load_workbook(io.BytesIO(dest_file.getvalue()), data_only=True)
+        st.session_state["last_cache_key_dest"] = dest_file.name
+    wb = st.session_state["dest_wb"]
+    
     target_sheet = st.selectbox("4. Escolha a ABA de Destino:", wb.sheetnames)
     ws = wb[target_sheet]
 
-    # --- 5. MAPEAMENTO POR COLUNA (Onde você diz para onde vai cada dado) ---
+    # --- 3. MAPEAMENTO POR COLUNA ---
     st.subheader("5. Mapeamento de Colunas")
     max_col = ws.max_column
     mapping = {}
@@ -57,32 +71,87 @@ if source_file and dest_file:
             if map_val != "--- Não mapear ---":
                 mapping[i] = map_val
 
-    # --- 6. PROCESSAMENTO ---
+    # --- 4. OPÇÕES DE LOCAL DE INSERÇÃO ---
+    st.subheader("6. Onde deseja inserir os dados na aba?")
+    modo_insercao = st.radio("Escolha o local de inserção:", ["Final da planilha", "A partir de uma linha específica"])
+    
+    min_linha_val = header_dest + 1
+    target_row = min_linha_val
+    if modo_insercao == "A partir de uma linha específica":
+        target_row = st.number_input(f"Digite o número da linha exata (Mínimo {min_linha_val}):", min_value=min_linha_val, value=min_linha_val)
+
+    # --- 5. PROCESSAMENTO E GERAÇÃO DO ARQUIVO ---
+    st.subheader("7. Finalizar Processo")
     if st.button("🚀 Processar e Atualizar Destino"):
         if not selected_indices:
-            st.error("Selecione pelo menos um registro!")
+            st.error("⚠️ Selecione pelo menos um registro na lista acima!")
         else:
             try:
                 wb_write = load_workbook(io.BytesIO(dest_file.getvalue()))
                 ws_write = wb_write[target_sheet]
-                start_row = ws_write.max_row + 1
+                num_new = len(selected_indices)
                 
-                # Pega a última sequência se for o caso
-                try: seq_atual = int(ws_write.cell(row=start_row-1, column=1).value or 0)
-                except: seq_atual = 0
+                # Define a linha inicial e abre espaço se for no meio
+                if modo_insercao == "Final da planilha":
+                    start_row = ws_write.max_row + 1
+                    try:
+                        base_seq = int(ws_write.cell(row=ws_write.max_row, column=1).value or 0)
+                    except:
+                        base_seq = 0
+                else:
+                    start_row = target_row
+                    ws_write.insert_rows(start_row, amount=num_new)
+                    try:
+                        base_seq = int(ws_write.cell(row=start_row - 1, column=1).value or 0)
+                    except:
+                        base_seq = 0
 
+                # Linha de referência para copiar a formatação (sempre pega a linha imediatamente anterior)
+                ref_row_idx = start_row - 1 if start_row > header_dest + 1 else header_dest + 1
+                if ref_row_idx < header_dest + 1:
+                    ref_row_idx = header_dest + 1
+
+                current_row = start_row
+                seq_val = base_seq
+
+                # Loop de escrita dos novos registros com herança de estilos ativa para qualquer local
                 for idx in selected_indices:
+                    seq_val += 1
                     for col_idx, origem_col in mapping.items():
                         if origem_col == "⚠️ Auto-incrementar (Seq)":
-                            seq_atual += 1
-                            ws_write.cell(row=start_row, column=col_idx, value=seq_atual)
+                            cell_val = seq_val
                         else:
-                            ws_write.cell(row=start_row, column=col_idx, value=df_origem.iloc[idx][origem_col])
-                    start_row += 1
+                            cell_val = df_origem.iloc[idx][origem_col]
+                        
+                        target_cell = ws_write.cell(row=current_row, column=col_idx, value=cell_val)
+                        
+                        # Copia formatação da linha anterior em qualquer caso de inserção
+                        ref_cell = ws_write.cell(row=ref_row_idx, column=col_idx)
+                        if ref_cell.font: target_cell.font = copy(ref_cell.font)
+                        if ref_cell.border: target_cell.border = copy(ref_cell.border)
+                        if ref_cell.fill: target_cell.fill = copy(ref_cell.fill)
+                        if ref_cell.alignment: target_cell.alignment = copy(ref_cell.alignment)
+                        if ref_cell.number_format: target_cell.number_format = ref_cell.number_format
+                            
+                    current_row += 1
+
+                # Atualiza a sequência de todas as linhas abaixo caso tenha inserido no meio
+                if modo_insercao == "A partir de uma linha específica":
+                    next_seq = seq_val
+                    for r in range(start_row + num_new, ws_write.max_row + 1):
+                        next_seq += 1
+                        ws_write.cell(row=r, column=1, value=next_seq)
 
                 buffer = io.BytesIO()
                 wb_write.save(buffer)
-                st.download_button("📥 Baixar Arquivo Atualizado", buffer.getvalue(), "destino_final.xlsx")
-                st.success("✅ Tudo pronto!")
+                buffer.seek(0)
+                
+                st.success(f"✅ Processamento concluído com sucesso! {num_new} registros adicionados.")
+                st.download_button(
+                    "📥 Baixar Arquivo Atualizado", 
+                    data=buffer.getvalue(), 
+                    file_name="destino_atualizado.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
             except Exception as e:
-                st.error(f"Erro: {e}")
+                st.error(f"Erro ao processar: {e}")
