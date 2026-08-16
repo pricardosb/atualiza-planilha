@@ -165,7 +165,7 @@ def titulo_estilizado(subtitulo=""):
 menu_opcao = st.sidebar.radio("Selecione a rotina:", [
     "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO",
     "ATUALIZAÇÕES GERAIS",
-    "GERAR RELATORIOS",
+    "LIMPAR ARQUIVO",
     "SOMENTE TRABALHADORES ATIVOS",
     "SAIR DO SISTEMA"
 ])
@@ -373,8 +373,6 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                     "vl_busca": vl_busca_str,
                     "aba": target_sheet
                 })
-                # --- LIMPA O CAMPO APÓS ADICIONAR ---
-                st.session_state['novo_val_op2'] = ""
                 st.success("Modificação adicionada à fila!"); st.rerun()
 
         if st.session_state['fila_modificacoes']:
@@ -400,9 +398,9 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                 file_bytes = gerar_arquivo_atualizado_bytes(io.BytesIO(st.session_state["wb_data"]), header, st.session_state['fila_modificacoes'], df, sheet_name=target_sheet)
                 st.download_button("📥 Baixar Arquivo Atualizado", file_bytes, "sinale_atualizado_final.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-# --- OPÇÃO 3: GERAR RELATORIOS ---
-elif menu_opcao == "GERAR RELATORIOS":
-    titulo_estilizado("Gerar Relatórios")
+# --- OPÇÃO 3: LIMPAR ARQUIVO ---
+elif menu_opcao == "LIMPAR ARQUIVO":
+    titulo_estilizado("Limpeza de Memória do Sistema")
     st.write("Clique abaixo para zerar os arquivos salvos em memória e começar um novo ciclo.")
     if st.button("🗑️ Limpar Dados da Memória"):
         st.session_state['source_df'] = None
