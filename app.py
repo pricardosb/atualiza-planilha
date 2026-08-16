@@ -49,7 +49,7 @@ st.title("⚡ INTEGRADOR ==> DADOS GERAIS DO INTERNO >>> SINALE")
 col1, col2 = st.columns(2)
 with col1:
     source_file = st.file_uploader("1. Arquivo de ORIGEM", type=["xlsx", "xls", "csv", "txt"])
-    origem_tem_cabecalho = st.checkbox("Origem tem cabeçalho na 1ª linha?", value=True)
+    origem_tem_cabecalho = st.checkbox("Arquivo de Origem tem cabeçalho?", value=True)
 with col2:
     dest_file = st.file_uploader("2. Arquivo de DESTINO (.xlsx)", type=["xlsx"])
     header_dest = st.number_input("Linha do cabeçalho no Arquivo de Destino:", value=11, min_value=1)
