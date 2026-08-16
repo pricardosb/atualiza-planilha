@@ -68,7 +68,6 @@ def gerar_arquivo_atualizado_bytes(uploaded_file, header, fila, df_original):
     
     red_font = Font(color="FF0000")
     
-    # Mapeamento de colunas (normalizadas)
     col_indices = {}
     for idx_c, c_name in enumerate(df_original.columns):
         c_norm = str(c_name).strip().upper()
@@ -294,10 +293,12 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
             novo_val = st.text_input("Digite o novo valor:")
             
             if st.button("➕ Adicionar à Fila de Modificações"):
+                valores_antigos_str = ", ".join([str(v) for v in selecionados[col_target].dropna().unique()])
                 st.session_state['fila_modificacoes'].append({
                     "indices": selecionados.index.tolist(),
                     "coluna": col_target,
-                    "novo_valor": novo_val
+                    "novo_valor": novo_val,
+                    "valor_antigo": valores_antigos_str if valores_antigos_str else "Vazio"
                 })
                 st.success("Modificação adicionada à fila com sucesso! O arquivo foi atualizado automaticamente em segundo plano.")
                 st.rerun()
@@ -308,7 +309,13 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
             st.subheader("📋 Fila de Modificações Pendentes")
             
             df_fila_resumo = pd.DataFrame([
-                {"Qtd Registros": len(item["indices"]), "Campo Modificado": item["coluna"], "Novo Valor": item["novo_valor"]}
+                {
+                    "QTD REG": len(item["indices"]),
+                    "CAMPO": item["coluna"],
+                    "VL CAMPO": item["valor_antigo"],
+                    "VL ANTIGO": item["valor_antigo"],
+                    "NOVO VALOR": item["novo_valor"]
+                }
                 for item in st.session_state['fila_modificacoes']
             ])
             st.dataframe(df_fila_resumo, use_container_width=True)
