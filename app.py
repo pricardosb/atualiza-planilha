@@ -3,25 +3,36 @@ import pandas as pd
 import streamlit as st
 
 st.set_page_config(page_title="Integrador XLS Profissional", layout="wide")
-st.title("⚡ Integrador XLS: Preservando Títulos e Inserção Precisa")
+st.title("⚡ Integrador XLS: Origem com/sem Cabeçalho")
 
 # --- 1. CARREGAMENTO DOS ARQUIVOS ---
 col1, col2 = st.columns(2)
 with col1:
     source_file = st.file_uploader("1. Arquivo de ORIGEM (Excel, CSV ou TXT)", type=["xlsx", "xls", "csv", "txt"])
+    origem_tem_cabecalho = st.checkbox("O arquivo de ORIGEM tem cabeçalho na 1ª linha?", value=True)
 with col2:
     dest_file = st.file_uploader("2. Arquivo de DESTINO (.xls)", type=["xls", "xlsx"])
     header_dest = st.number_input("Linha do cabeçalho no Destino:", value=11, min_value=1)
 
 if source_file and dest_file:
-    # --- LEITURA DA ORIGEM ---
-    if "source_df" not in st.session_state or st.session_state.get("last_source") != source_file.name:
+    # --- LEITURA DA ORIGEM (COM OU SEM CABEÇALHO) ---
+    cache_key = f"{source_file.name}_{origem_tem_cabecalho}"
+    if "source_df" not in st.session_state or st.session_state.get("last_cache_key") != cache_key:
         try:
-            if source_file.name.endswith(".csv"): raw = pd.read_csv(source_file)
-            elif source_file.name.endswith(".txt"): raw = pd.read_csv(source_file, sep=None, engine='python')
-            else: raw = pd.read_excel(source_file)
+            hdr = 0 if origem_tem_cabecalho else None
+            if source_file.name.endswith(".csv"): 
+                raw = pd.read_csv(source_file, header=hdr)
+            elif source_file.name.endswith(".txt"): 
+                raw = pd.read_csv(source_file, sep=None, engine='python', header=hdr)
+            else: 
+                raw = pd.read_excel(source_file, header=hdr)
+            
+            # Se não tem cabeçalho, cria nomes genéricos para as colunas
+            if not origem_tem_cabecalho:
+                raw.columns = [f"Coluna {i+1}" for i in range(len(raw.columns))]
+                
             st.session_state["source_df"] = raw
-            st.session_state["last_source"] = source_file.name
+            st.session_state["last_cache_key"] = cache_key
         except Exception as e:
             st.error(f"Erro ao ler a origem: {e}")
             st.stop()
@@ -30,7 +41,6 @@ if source_file and dest_file:
 
     # --- LEITURA DO DESTINO (PRESERVANDO TUDO ACIMA DO CABEÇALHO) ---
     try:
-        # Lê o arquivo mantendo todas as linhas (sem descartar o topo)
         all_sheets_raw = pd.read_excel(dest_file, sheet_name=None, header=None)
         sheet_names = list(all_sheets_raw.keys())
         target_sheet = st.selectbox("3. Escolha a ABA (Pasta) de Destino:", sheet_names)
@@ -87,12 +97,10 @@ if source_file and dest_file:
             st.error("⚠️ Faça pelo menos um mapeamento de colunas!")
         else:
             try:
-                # Separa as partes da planilha para não apagar o topo
-                top_rows = sheet_df.iloc[:header_row_idx].copy()      # Linhas acima do cabeçalho (títulos intactos)
-                header_df = sheet_df.iloc[[header_row_idx]].copy()    # Linha do cabeçalho
-                data_rows = sheet_df.iloc[header_row_idx + 1:].copy()  # Dados existentes
+                top_rows = sheet_df.iloc[:header_row_idx].copy()      
+                header_df = sheet_df.iloc[[header_row_idx]].copy()    
+                data_rows = sheet_df.iloc[header_row_idx + 1:].copy()  
                 
-                # Prepara os novos dados mapeados
                 dados_selecionados = df_origem.iloc[selected_indices]
                 new_rows_df = pd.DataFrame(columns=sheet_df.columns)
                 
@@ -103,7 +111,6 @@ if source_file and dest_file:
                         new_row_data[col_idx] = src_row[orig_col]
                     new_rows_df = pd.concat([new_rows_df, pd.DataFrame([new_row_data])], ignore_index=True)
                 
-                # Insere no local exato escolhido
                 if modo_insercao == "Final da planilha":
                     final_data = pd.concat([data_rows, new_rows_df], ignore_index=True)
                 else:
@@ -114,17 +121,15 @@ if source_file and dest_file:
                     part2 = data_rows.iloc[rel_idx:]
                     final_data = pd.concat([part1, new_rows_df, part2], ignore_index=True)
                 
-                # Reconstrói a aba mantendo o topo e o cabeçalho originais
                 updated_sheet_df = pd.concat([top_rows, header_df, final_data], ignore_index=True)
                 all_sheets_raw[target_sheet] = updated_sheet_df
                 
-                # Salva todas as abas em formato .xls
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine='xlwt') as writer:
                     for s_name, s_df in all_sheets_raw.items():
                         s_df.to_excel(writer, sheet_name=s_name, index=False, header=False)
                 
-                st.success("✅ Arquivo XLS processado com sucesso mantendo os títulos!")
+                st.success("✅ Arquivo XLS processado com sucesso!")
                 st.download_button(
                     "📥 Baixar Arquivo Atualizado (.xls)", 
                     data=buffer.getvalue(), 
