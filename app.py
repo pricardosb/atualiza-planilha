@@ -5,6 +5,26 @@ import streamlit as st
 from openpyxl import load_workbook
 from copy import copy
 
+# --- CONFIGURAÇÃO DE SEGURANÇA ---
+# Mude a senha abaixo para a sua preferência
+SENHA_ACESSO = "123456" 
+
+st.set_page_config(page_title="Integrador Profissional", layout="wide")
+
+if "autenticado" not in st.session_state:
+    st.session_state["autenticado"] = False
+
+if not st.session_state["autenticado"]:
+    st.title("🔒 Acesso Restrito")
+    password = st.text_input("Digite a senha para acessar o Integrador:", type="password")
+    if st.button("Entrar"):
+        if password == SENHA_ACESSO:
+            st.session_state["autenticado"] = True
+            st.rerun()
+        else:
+            st.error("Senha incorreta!")
+    st.stop()
+
 # --- FUNÇÕES DE SUPORTE ---
 def copiar_estilo_completo(origem, destino):
     if origem.has_style:
@@ -41,8 +61,7 @@ def extrair_valor_limpo(df, idx, col_name):
     except Exception:
         return None
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Integrador Profissional", layout="wide")
+# --- RESTO DO APLICATIVO ---
 st.title("⚡ INTEGRADOR ==> DADOS GERAIS DO INTERNO >>> SINALE")
 
 # --- CARREGAMENTO ---
