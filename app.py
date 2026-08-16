@@ -93,7 +93,6 @@ if menu_opcao == "SAIR DO SISTEMA":
 if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
     titulo_estilizado("Rotina: Inclusão de Trabalho")
 
-    # --- CARREGAMENTO ---
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("1. Arquivo de ORIGEM")
@@ -133,7 +132,6 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
             st.session_state["wb_data"] = dest_file.getvalue()
             st.session_state["last_dest_name"] = dest_file.name
 
-    # --- FLUXO PRINCIPAL ---
     df_origem = st.session_state.get("source_df")
     wb_data = st.session_state.get("wb_data")
 
@@ -143,7 +141,6 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
         target_sheet = st.selectbox("Escolha a ABA na Planilha de Destino a ser Atualizada:", wb.sheetnames)
         ws = wb[target_sheet]
 
-        # --- 3. SELEÇÃO DE REGISTROS ---
         st.subheader("3. Seleção de Registros")
         col_busca = st.selectbox("Coluna identificadora (para seleção):", df_origem.columns)
         
@@ -156,7 +153,6 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
 
         st.write("---")
 
-        # --- 4. CORRELAÇÃO ORIGEM X DESTINO ---
         st.subheader("4. Correlação dos dados dos Arquivos ORIGEM X DESTINO")
         mapping = {}
         cols_ui = st.columns(4)
@@ -171,14 +167,12 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
 
         st.write("---")
 
-        # --- 5. LOCAL DA ATUALIZAÇÃO ---
         st.subheader("5. Local da Atualização")
         modo_insercao = st.radio("Local de inserção:", ["Final da planilha", "A partir de uma linha específica"])
         target_row = st.number_input("Linha:", min_value=header_dest+1, value=header_dest+1) if modo_insercao == "A partir de uma linha específica" else ws.max_row + 1
 
         st.write("---")
 
-        # --- PROCESSAMENTO ---
         if st.button("🚀 Processar e Atualizar"):
             if not selected_indices: st.error("Selecione itens!"); st.stop()
             
@@ -187,10 +181,8 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
             base_seq = 0
             if ref_row_idx >= header_dest:
                 val_acima = ws.cell(row=ref_row_idx, column=1).value
-                try:
-                    base_seq = int(val_acima)
-                except:
-                    base_seq = 0
+                try: base_seq = int(val_acima)
+                except: base_seq = 0
             
             if modo_insercao == "A partir de uma linha específica":
                 ws.insert_rows(target_row, amount=len(selected_indices))
@@ -305,64 +297,87 @@ elif menu_opcao == "ATUALIZAR DADOS":
         try:
             wb_upd = load_workbook(sinale_file_upd)
             sheet_upd = st.selectbox("Escolha a aba a ser tratada:", wb_upd.sheetnames, key="sheet_sinale_upd")
-            
-            sinale_file_upd.seek(0)
-            df_upd = pd.read_excel(sinale_file_upd, sheet_name=sheet_upd, header=header_upd-1)
             ws_u = wb_upd[sheet_upd]
+            
+            # Mapeamento robusto dos cabeçalhos e linhas físicas do Excel
+            cabecalhos = {}
+            for c_idx in range(1, ws_u.max_column + 1):
+                val = ws_u.cell(row=header_upd, column=c_idx).value
+                if val is not None:
+                    cabecalhos[str(val).strip()] = c_idx
+            
+            lista_colunas = list(cabecalhos.keys())
             
             st.write("---")
             st.markdown(f"### ✏️ Configuração de Atualização na Aba: **{sheet_upd}**")
             
-            # --- 1. SELEÇÃO DE REGISTROS ---
-            st.subheader("1. Seleção dos Registros a Atualizar")
-            modo_atd_reg = st.radio("Como deseja selecionar os registros?", ["Selecionar registros específicos", "Atualizar todos os registros da planilha"], key="modo_atd_reg")
-            
-            selected_indices_upd = []
-            if modo_atd_reg == "Selecionar registros específicos":
-                col_busca_upd = st.selectbox("Coluna identificadora para busca:", df_upd.columns, key="col_busca_upd")
-                opcoes_selecao_upd = [f"{val} (Linha {idx})" for idx, val in df_upd[col_busca_upd].items()]
-                selected_options_upd = st.multiselect("🔍 Escolha os registros:", opcoes_selecao_upd, key="sel_opts_upd")
-                selected_indices_upd = [int(item.split("(Linha ")[1].replace(")", "")) for item in selected_options_upd]
-                if selected_indices_upd:
-                    st.info(f"📊 **{len(selected_indices_upd)}** registro(s) selecionado(s) para atualização.")
+            if not lista_colunas:
+                st.error("Nenhuma coluna encontrada na linha de cabeçalho especificada!")
             else:
-                selected_indices_upd = list(df_upd.index)
-                st.info(f"📊 Todos os **{len(selected_indices_upd)}** registros da planilha serão considerados.")
-            
-            st.write("---")
-            
-            # --- 2. DEFINIÇÃO DO CAMPO E VALOR ---
-            st.subheader("2. Definir Campo e Novo Valor")
-            col_alvo_upd = st.selectbox("Selecione o campo (coluna) que deseja atualizar:", df_upd.columns, key="col_alvo_upd")
-            novo_valor = st.text_input("Informe o novo valor para este campo:", key="novo_valor_input")
-            
-            st.write("---")
-            
-            if st.button("🚀 Processar Atualização e Baixar"):
-                if modo_atd_reg == "Selecionar registros específicos" and not selected_indices_upd:
-                    st.error("Selecione ao menos um registro para atualizar!")
+                # Carregar dados atrelando a linha real do Excel
+                dados_tabela = []
+                for r in range(header_upd + 1, ws_u.max_row + 1):
+                    row_data = {}
+                    has_data = False
+                    for col_name, c_idx in cabecalhos.items():
+                        cell_val = ws_u.cell(row=r, column=c_idx).value
+                        row_data[col_name] = cell_val
+                        if cell_val is not None and str(cell_val).strip() != "":
+                            has_data = True
+                    if has_data:
+                        row_data["_excel_row"] = r
+                        dados_tabela.append(row_data)
+                
+                # --- 1. SELEÇÃO DE REGISTROS ---
+                st.subheader("1. Seleção dos Registros a Atualizar")
+                modo_atd_reg = st.radio("Como deseja selecionar os registros?", ["Selecionar registros específicos", "Atualizar todos os registros da planilha"], key="modo_atd_reg")
+                
+                linhas_excel_alvo = []
+                if modo_atd_reg == "Selecionar registros específicos":
+                    col_busca_upd = st.selectbox("Coluna identificadora para busca:", lista_colunas, key="col_busca_upd")
+                    
+                    opcoes_selecao_upd = [f"{row[col_busca_upd]} (Linha Excel {row['_excel_row']})" for row in dados_tabela if row.get(col_busca_upd) is not None]
+                    selected_options_upd = st.multiselect("🔍 Escolha os registros:", opcoes_selecao_upd, key="sel_opts_upd")
+                    
+                    for item in selected_options_upd:
+                        try:
+                            l_num = int(item.split("(Linha Excel ")[1].replace(")", ""))
+                            linhas_excel_alvo.append(l_num)
+                        except: pass
+                    
+                    if linhas_excel_alvo:
+                        st.info(f"📊 **{len(linhas_excel_alvo)}** registro(s) selecionado(s) para atualização.")
                 else:
-                    # Identificar o índice da coluna no Excel (1-based)
-                    col_idx_excel = None
-                    for c_idx in range(1, ws_u.max_column + 1):
-                        if ws_u.cell(row=header_upd, column=c_idx).value == col_alvo_upd:
-                            col_idx_excel = c_idx
-                            break
-                    if not col_idx_excel:
-                        col_idx_excel = list(df_upd.columns).index(col_alvo_upd) + 1
-                    
-                    count_atualizados = 0
-                    for idx in selected_indices_upd:
-                        # Linha no excel = linha do cabeçalho + 1 (dados logo abaixo) + índice do dataframe
-                        excel_row = header_upd + 1 + idx
-                        ws_u.cell(row=excel_row, column=col_idx_excel, value=novo_valor)
-                        count_atualizados += 1
-                    
-                    buffer = io.BytesIO()
-                    wb_upd.save(buffer)
-                    buffer.seek(0)
-                    st.success(f"✅ {count_atualizados} registro(s) atualizado(s) com sucesso na coluna **{col_alvo_upd}**!")
-                    st.download_button("📥 Baixar Arquivo SINALE Atualizado", buffer.getvalue(), "sinale_atualizado_dados.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    linhas_excel_alvo = [row["_excel_row"] for row in dados_tabela]
+                    st.info(f"📊 Todos os **{len(linhas_excel_alvo)}** registros da planilha serão considerados.")
+                
+                st.write("---")
+                
+                # --- 2. DEFINIÇÃO DO CAMPO E VALOR ---
+                st.subheader("2. Definir Campo e Novo Valor")
+                col_alvo_upd = st.selectbox("Selecione o campo (coluna) que deseja atualizar:", lista_colunas, key="col_alvo_upd")
+                novo_valor = st.text_input("Informe o novo valor para este campo:", key="novo_valor_input")
+                
+                st.write("---")
+                
+                if st.button("🚀 Processar Atualização e Baixar"):
+                    if modo_atd_reg == "Selecionar registros específicos" and not linhas_excel_alvo:
+                        st.error("Selecione ao menos um registro para atualizar!")
+                    else:
+                        col_idx_excel = cabecalhos.get(col_alvo_upd)
+                        if not col_idx_excel:
+                            st.error(f"Coluna '{col_alvo_upd}' não encontrada no arquivo.")
+                        else:
+                            count_atualizados = 0
+                            for excel_row in linhas_excel_alvo:
+                                ws_u.cell(row=excel_row, column=col_idx_excel, value=novo_valor)
+                                count_atualizados += 1
+                            
+                            buffer = io.BytesIO()
+                            wb_upd.save(buffer)
+                            buffer.seek(0)
+                            st.success(f"✅ {count_atualizados} registro(s) atualizado(s) com sucesso na coluna **{col_alvo_upd}**!")
+                            st.download_button("📥 Baixar Arquivo SINALE Atualizado", buffer.getvalue(), "sinale_atualizado_dados.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         except Exception as e:
             st.error(f"Erro ao processar o arquivo para atualização: {e}")
 
