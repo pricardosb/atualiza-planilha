@@ -9,7 +9,7 @@ from copy import copy
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="SINALE WEB", layout="wide")
 
-# --- FUNÇÕES DE SUPORTE (ORIGINAIS) ---
+# --- FUNÇÕES DE SUPORTE ---
 def copiar_estilo_completo(origem, destino):
     if origem.has_style:
         destino.font = copy(origem.font); destino.border = copy(origem.border)
@@ -80,7 +80,6 @@ def gerar_arquivo_atualizado_bytes(uploaded_file, header, fila, df_original):
     
     modified_cols_by_row = {}
     
-    # 1. Aplicar modificações da fila
     for mod in fila:
         col_target = mod["coluna"]
         novo_val = mod["novo_valor"]
@@ -100,7 +99,6 @@ def gerar_arquivo_atualizado_bytes(uploaded_file, header, fila, df_original):
             
             ws.cell(row=excel_row, column=col_alvo_idx, value=valor_convertido)
             
-            # Regra RZ -> REM
             if is_rz and rem_col_idx is not None:
                 try:
                     num_rz = float(str(valor_convertido).replace(',', '.'))
@@ -110,7 +108,6 @@ def gerar_arquivo_atualizado_bytes(uploaded_file, header, fila, df_original):
                 except:
                     pass
                     
-            # Regra SAÍDA -> Linha vermelha
             if is_saida:
                 for c_idx in range(1, ws.max_column + 1):
                     cell_obj = ws.cell(row=excel_row, column=c_idx)
@@ -120,7 +117,6 @@ def gerar_arquivo_atualizado_bytes(uploaded_file, header, fila, df_original):
                     else:
                         cell_obj.font = red_font
                         
-    # 2. Aplicar regra do PECÚLIO para linhas onde o SALÁRIO foi atualizado
     if peculio_col_idx is not None and salario_col_idx is not None:
         for idx, cols_mod in modified_cols_by_row.items():
             if any(c in ['SALARIO', 'SALÁRIO'] for c in cols_mod):
@@ -161,7 +157,7 @@ menu_opcao = st.sidebar.radio("Selecione a rotina:", [
     "SAIR DO SISTEMA"
 ])
 
-# --- OPÇÃO 1: INCLUSÃO DE TRABALHO (ORIGINAL COMPLETA) ---
+# --- OPÇÃO 1 ---
 if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
     titulo_estilizado("Rotina: Inclusão de Trabalho")
     col1, col2 = st.columns(2)
@@ -228,22 +224,20 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
             buffer = io.BytesIO(); wb.save(buffer)
             st.success("Processado!"); st.download_button("📥 Baixar", buffer.getvalue(), "sinale_atualizado.xlsx")
 
-# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS ---
+# --- OPÇÃO 2 ---
 elif menu_opcao == "ATUALIZAÇÕES GERAIS":
     titulo_estilizado("Atualizações Gerais")
     sinale_file = st.file_uploader("Selecione o arquivo do SINALE (.xlsx)", type=["xlsx"])
     header = st.number_input("Linha do cabeçalho:", value=11, min_value=1)
     
     if sinale_file:
-        if 'fila_modificacoes' not in st.session_state:
-            st.session_state['fila_modificacoes'] = []
+        if 'fila_modificacoes' not in st.session_state: st.session_state['fila_modificacoes'] = []
         if 'last_sinale_name' not in st.session_state or st.session_state['last_sinale_name'] != sinale_file.name:
             st.session_state['fila_modificacoes'] = []
             st.session_state['last_sinale_name'] = sinale_file.name
 
         df = pd.read_excel(sinale_file, header=header-1)
         
-        # 1. VISUALIZAÇÃO E PESQUISA INTELIGENTE
         st.subheader("🔍 Filtros de Visualização")
         cols_para_ver = st.multiselect("Quais campos deseja visualizar?", df.columns.tolist(), default=df.columns.tolist())
         
@@ -253,17 +247,13 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         with val_filtro: filtro_vals = st.multiselect("Selecione o(s) valor(es) para filtrar:", valores_existentes)
         
         df_view = df.copy()
-        if filtro_vals:
-            df_view = df_view[df_view[filtro_col].astype(str).isin(filtro_vals)]
+        if filtro_vals: df_view = df_view[df_view[filtro_col].astype(str).isin(filtro_vals)]
         
         st.metric("Total de Registros Encontrados", len(df_view))
         st.dataframe(df_view[cols_para_ver], use_container_width=True)
         
-        # 2. SELEÇÃO PARA ATUALIZAÇÃO
         st.subheader("✏️ Seleção para Atualizar")
-        
         if 'select_all' not in st.session_state: st.session_state['select_all'] = False
-        
         cols_btns = st.columns([1, 1, 4])
         with cols_btns[0]:
             if st.button("✅ Marcar Todos"): st.session_state['select_all'] = True; st.rerun()
@@ -272,47 +262,35 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
             
         df_for_edit = df_view.copy()
         df_for_edit.insert(0, "Atualizar?", st.session_state['select_all'])
-        
         df_editado = st.data_editor(df_for_edit, column_config={"Atualizar?": st.column_config.CheckboxColumn()}, use_container_width=True)
         
-        # 3. CONTAGEM, VALOR ATUAL E ADIÇÃO À FILA
         selecionados = df_editado[df_editado["Atualizar?"] == True]
         st.metric("Total de Registros Marcados", len(selecionados))
         
         if not selecionados.empty:
             col_target = st.selectbox("Selecione a coluna que deseja alterar:", df.columns)
-            
-            valores_atuais = selecionados[col_target].dropna().unique()
-            if len(valores_atuais) == 1:
-                st.info(f"💡 **Valor Atual no(s) registro(s) selecionado(s):** `{valores_atuais[0]}`")
-            elif len(valores_atuais) > 1:
-                st.warning(f"⚠️ **Atenção:** Os registros selecionados possuem **{len(valores_atuais)} valores diferentes** nesta coluna: `{list(valores_atuais)}`")
-            else:
-                st.info("💡 **Valor Atual:** *(Vazio / Nulo)*")
-            
             novo_val = st.text_input("Digite o novo valor:")
             
             if st.button("➕ Adicionar à Fila de Modificações"):
                 valores_antigos_str = ", ".join([str(v) for v in selecionados[col_target].dropna().unique()])
+                vl_busca_str = ", ".join(filtro_vals) if filtro_vals else "Todos"
                 st.session_state['fila_modificacoes'].append({
                     "indices": selecionados.index.tolist(),
                     "coluna": col_target,
                     "novo_valor": novo_val,
-                    "valor_antigo": valores_antigos_str if valores_antigos_str else "Vazio"
+                    "valor_antigo": valores_antigos_str if valores_antigos_str else "Vazio",
+                    "vl_busca": vl_busca_str
                 })
-                st.success("Modificação adicionada à fila com sucesso! O arquivo foi atualizado automaticamente em segundo plano.")
-                st.rerun()
+                st.success("Modificação adicionada à fila!"); st.rerun()
 
-        # 4. EXIBIÇÃO DA FILA E BOTÃO DE DOWNLOAD PRONTO
         if st.session_state['fila_modificacoes']:
             st.markdown("---")
             st.subheader("📋 Fila de Modificações Pendentes")
-            
             df_fila_resumo = pd.DataFrame([
                 {
                     "QTD REG": len(item["indices"]),
+                    "VL BUSCA": item["vl_busca"],
                     "CAMPO": item["coluna"],
-                    "VL CAMPO": item["valor_antigo"],
                     "VL ANTIGO": item["valor_antigo"],
                     "NOVO VALOR": item["novo_valor"]
                 }
@@ -322,22 +300,11 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
             
             col_f1, col_f2 = st.columns(2)
             with col_f1:
-                if st.button("🗑️ Limpar Fila de Modificações"):
-                    st.session_state['fila_modificacoes'] = []
-                    st.rerun()
+                if st.button("🗑️ Limpar Fila"): st.session_state['fila_modificacoes'] = []; st.rerun()
             with col_f2:
                 file_bytes = gerar_arquivo_atualizado_bytes(sinale_file, header, st.session_state['fila_modificacoes'], df)
-                st.download_button(
-                    label="📥 Baixar Arquivo Atualizado",
-                    data=file_bytes,
-                    file_name="sinale_atualizado_final.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+                st.download_button("📥 Baixar Arquivo Atualizado", file_bytes, "sinale_atualizado_final.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-# --- OUTRAS OPÇÕES ---
-elif menu_opcao == "LIMPAR ARQUIVO":
-    st.write("Funcionalidade de Limpeza...")
-elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
-    st.write("Funcionalidade de Filtro de Ativos...")
-elif menu_opcao == "SAIR DO SISTEMA":
-    st.stop()
+elif menu_opcao == "LIMPAR ARQUIVO": st.write("Funcionalidade de Limpeza...")
+elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS": st.write("Funcionalidade de Filtro de Ativos...")
+elif menu_opcao == "SAIR DO SISTEMA": st.stop()
