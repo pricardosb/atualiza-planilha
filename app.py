@@ -173,6 +173,16 @@ menu_opcao = st.sidebar.radio("Selecione a rotina:", [
 # --- OPÇÃO 1 ---
 if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
     titulo_estilizado("INTEGRADOR ==> DADOS GERAIS DO INTERNO >>> SINALE")
+    
+    # Opção para descartar memória antes de carregar
+    if st.checkbox("🗑️ Descartar dados da memória e carregar novos arquivos", value=False, key="desc_op1"):
+        st.session_state['source_df'] = None
+        st.session_state['wb_data'] = None
+        st.session_state['last_dest_name'] = None
+        st.session_state['fila_modificacoes'] = []
+        st.success("Memória limpa com sucesso! Faça o upload dos novos arquivos abaixo.")
+        st.rerun()
+
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("1. Arquivo de ORIGEM")
@@ -290,21 +300,22 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
     
     if st.session_state.get("wb_data") is not None:
         st.info("📁 Arquivo carregado automaticamente da memória.")
-        sinale_file = io.BytesIO(st.session_state["wb_data"])
         
-        if st.checkbox("Deseja carregar um arquivo Excel diferente manualmente?", value=False):
-            novo_upload = st.file_uploader("Selecione o arquivo do SINALE (.xlsx)", type=["xlsx"])
-            if novo_upload:
-                st.session_state["wb_data"] = novo_upload.getvalue()
-                st.session_state['last_sinale_name'] = novo_upload.name
-                sinale_file = io.BytesIO(st.session_state["wb_data"])
+        if st.checkbox("🗑️ Descartar dados da memória e carregar novo arquivo", value=False, key="desc_op2"):
+            st.session_state["wb_data"] = None
+            st.session_state['fila_modificacoes'] = []
+            st.success("Memória limpa com sucesso!")
+            st.rerun()
+            
+        sinale_file = io.BytesIO(st.session_state["wb_data"])
     else:
-        st.warning("⚠️ Nenhum arquivo de destino encontrado na memória. Faça o upload abaixo ou execute a Opção 1.")
+        st.warning("⚠️ Nenhum arquivo de destino encontrado na memória. Faça o upload abaixo.")
         sinale_file = st.file_uploader("Selecione o arquivo do SINALE (.xlsx)", type=["xlsx"])
         if sinale_file:
             st.session_state["wb_data"] = sinale_file.getvalue()
             st.session_state['last_sinale_name'] = sinale_file.name
             sinale_file = io.BytesIO(st.session_state["wb_data"])
+            st.rerun()
 
     if st.session_state.get("wb_data") is not None:
         header = st.number_input("Linha do cabeçalho:", value=11, min_value=1)
@@ -406,6 +417,12 @@ elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
     
     if st.session_state.get("wb_data") is not None:
         st.info("📁 Utilizando arquivo presente na memória.")
+        
+        if st.checkbox("🗑️ Descartar dados da memória e carregar novo arquivo", value=False, key="desc_op4"):
+            st.session_state["wb_data"] = None
+            st.success("Memória limpa com sucesso!")
+            st.rerun()
+            
         wb = load_workbook(io.BytesIO(st.session_state["wb_data"]), data_only=True)
         aba_ativos = st.selectbox("Selecione a aba:", wb.sheetnames, key="aba_atv")
         
@@ -423,7 +440,7 @@ elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
                 st.success(f"Foram encontrados {len(df_filtrado)} registros ativos.")
                 st.dataframe(df_filtrado, use_container_width=True)
     else:
-        st.warning("⚠️ Nenhum arquivo carregado na memória. Faça o upload abaixo ou processe na Opção 1.")
+        st.warning("⚠️ Nenhum arquivo carregado na memória. Faça o upload abaixo.")
         up_memo = st.file_uploader("Arquivo Excel:", type=["xlsx"], key="up_memo_ativos")
         if up_memo:
             st.session_state["wb_data"] = up_memo.getvalue()
