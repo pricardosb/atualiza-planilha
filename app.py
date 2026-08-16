@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
 from copy import copy
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
@@ -35,6 +36,30 @@ def extrair_valor_limpo(df, idx, col_name):
         if pd.isna(val): return None
         return val.item() if hasattr(val, 'item') else val
     except: return None
+
+def converter_valor_inteligente(val_str, dtype_original):
+    if val_str is None or str(val_str).strip() == "":
+        return None
+    val_str = str(val_str).strip()
+    
+    if pd.api.types.is_integer_dtype(dtype_original):
+        try: return int(val_str)
+        except ValueError: pass
+    elif pd.api.types.is_float_dtype(dtype_original):
+        try: return float(val_str.replace(',', '.'))
+        except ValueError: pass
+    elif pd.api.types.is_datetime64_any_dtype(dtype_original):
+        try: return pd.to_datetime(val_str)
+        except: pass
+
+    if '.' not in val_str and ',' not in val_str:
+        try: return int(val_str)
+        except ValueError: pass
+        
+    try: return float(val_str.replace(',', '.'))
+    except ValueError: pass
+    
+    return val_str
 
 def titulo_estilizado(subtitulo=""):
     st.markdown(f"<div style='text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border-radius: 12px; margin-bottom: 1.5rem;'><h1>⚡ SINALE WEB</h1><p>{subtitulo}</p></div>", unsafe_allow_html=True)
@@ -159,16 +184,14 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         
         df_editado = st.data_editor(df_for_edit, column_config={"Atualizar?": st.column_config.CheckboxColumn()}, use_container_width=True)
         
-        # 3. CONTAGEM, VALOR ATUAL E ATUALIZAÇÃO
+        # 3. CONTAGEM, VALOR ATUAL E ATUALIZAÇÃO COM REGRAS DE NEGÓCIO
         selecionados = df_editado[df_editado["Atualizar?"] == True]
         st.metric("Total de Registros Marcados", len(selecionados))
         
         if not selecionados.empty:
             col_target = st.selectbox("Selecione a coluna que deseja alterar:", df.columns)
             
-            # --- EXIBIÇÃO DO VALOR ATUAL DO CAMPO SELECIONADO ---
             valores_atuais = selecionados[col_target].dropna().unique()
-            
             if len(valores_atuais) == 1:
                 st.info(f"💡 **Valor Atual no(s) registro(s) selecionado(s):** `{valores_atuais[0]}`")
             elif len(valores_atuais) > 1:
@@ -179,8 +202,40 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
             novo_val = st.text_input("Digite o novo valor:")
             
             if st.button("🚀 Aplicar Atualização"):
+                valor_convertido = converter_valor_inteligente(novo_val, df[col_target].dtype)
+                
+                # Identificação de colunas para as regras especiais
+                is_rz = col_target.strip().upper() in ['RZ', 'R.Z.']
+                rem_col_idx = None
+                for idx_c, c_name in enumerate(df.columns):
+                    if str(c_name).strip().upper() == 'REM':
+                        rem_col_idx = idx_c + 1
+                        break
+                        
+                is_saida = col_target.strip().upper() in ['SAIDA', 'SAÍDA']
+                red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+                
                 for idx in selecionados.index:
-                    ws.cell(row=idx + header + 1, column=df.columns.get_loc(col_target) + 1, value=novo_val)
+                    excel_row = idx + header + 1
+                    col_alvo_idx = df.columns.get_loc(col_target) + 1
+                    
+                    # Atualiza o campo principal
+                    ws.cell(row=excel_row, column=col_alvo_idx, value=valor_convertido)
+                    
+                    # REGRA 2: Se RZ >= 3, atualiza REM com divisão inteira por 3
+                    if is_rz and rem_col_idx is not None:
+                        try:
+                            num_rz = float(str(valor_convertido).replace(',', '.'))
+                            if num_rz >= 3:
+                                rem_val = int(num_rz // 3)
+                                ws.cell(row=excel_row, column=rem_col_idx, value=rem_val)
+                        except:
+                            pass
+                            
+                    # REGRA 1: Se o campo alterado for SAÍDA, pinta a linha inteira de vermelho
+                    if is_saida:
+                        for c_idx in range(1, ws.max_column + 1):
+                            ws.cell(row=excel_row, column=c_idx).fill = red_fill
                 
                 buffer = io.BytesIO()
                 wb.save(buffer)
