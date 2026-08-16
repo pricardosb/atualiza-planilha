@@ -185,7 +185,7 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
     with col2:
         st.subheader("2. Arquivo de DESTINO")
         dest_file = st.file_uploader("Selecione o arquivo de DESTINO (.xlsx)", type=["xlsx"], key="dest_upload")
-        header_dest = st.number_input("Linha do cabeçalho no Arquivo de Destino:", value=11, min_value=1)
+        header_dest = st.number_input("Linha do cabeçalho no Arquivo de Destino:", value=11, min_value=1, key="header_dest_op1")
 
     if source_file:
         cache_key_src = f"{source_file.name}_{origem_tem_cabecalho}"
@@ -210,13 +210,13 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
 
     if df_origem is not None and wb_data is not None:
         wb = load_workbook(io.BytesIO(wb_data))
-        target_sheet = st.selectbox("Escolha a ABA na Planilha de Destino a ser Atualizada:", wb.sheetnames)
+        target_sheet = st.selectbox("Escolha a ABA na Planilha de Destino a ser Atualizada:", wb.sheetnames, key="target_sheet_op1")
         ws = wb[target_sheet]
 
         st.subheader("3. Seleção de Registros")
-        col_busca = st.selectbox("Coluna identificadora (para seleção):", df_origem.columns)
+        col_busca = st.selectbox("Coluna identificadora (para seleção):", df_origem.columns, key="col_busca_op1")
         opcoes_selecao = [f"{val} (Linha {idx})" for idx, val in df_origem[col_busca].items()]
-        selected_options = st.multiselect("🔍 Escolha os registros:", opcoes_selecao)
+        selected_options = st.multiselect("🔍 Escolha os registros:", opcoes_selecao, key="sel_opt_op1")
         selected_indices = [int(item.split("(Linha ")[1].replace(")", "")) for item in selected_options]
 
         if selected_indices:
@@ -224,22 +224,31 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
 
         st.write("---")
         st.subheader("4. Correlação dos dados dos Arquivos ORIGEM X DESTINO")
+        
+        # Leitura precisa dos nomes das colunas de destino usando Pandas (evita erros de células vazias/mescladas)
+        try:
+            df_dest_preview = pd.read_excel(io.BytesIO(wb_data), sheet_name=target_sheet, header=header_dest-1)
+            df_dest_preview.columns = deduplicar_colunas(df_dest_preview.columns)
+            colunas_destino = df_dest_preview.columns.tolist()
+        except:
+            colunas_destino = [f"Col {i}" for i in range(1, ws.max_column + 1)]
+
         mapping = {}
         cols_ui = st.columns(4)
         opcoes_mapeamento = ["--- Não mapear ---", "⚠️ Auto-incrementar (Seq)"] + list(df_origem.columns)
-        for i in range(1, ws.max_column + 1):
-            header_val = ws.cell(row=header_dest, column=i).value
+        
+        for i, col_name in enumerate(colunas_destino, start=1):
             with cols_ui[(i-1) % 4]:
-                map_val = st.selectbox(f"Col {i} ({header_val or 'S/ Título'})", opcoes_mapeamento, key=f"map_{i}")
+                map_val = st.selectbox(f"Col {i} ({col_name})", opcoes_mapeamento, key=f"map_{i}")
                 if map_val != "--- Não mapear ---": mapping[i] = map_val
 
         st.write("---")
         st.subheader("5. Local da Atualização")
-        modo_insercao = st.radio("Local de inserção:", ["Final da planilha", "A partir de uma linha específica"])
-        target_row = st.number_input("Linha:", min_value=header_dest+1, value=header_dest+1) if modo_insercao == "A partir de uma linha específica" else ws.max_row + 1
+        modo_insercao = st.radio("Local de inserção:", ["Final da planilha", "A partir de uma linha específica"], key="modo_ins_op1")
+        target_row = st.number_input("Linha:", min_value=header_dest+1, value=header_dest+1, key="target_row_op1") if modo_insercao == "A partir de uma linha específica" else ws.max_row + 1
 
         st.write("---")
-        if st.button("🚀 Processar e Atualizar"):
+        if st.button("🚀 Processar e Atualizar", key="btn_proc_op1"):
             if not selected_indices: 
                 st.error("Selecione itens!")
                 st.stop()
@@ -317,7 +326,7 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         df = pd.read_excel(io.BytesIO(st.session_state["wb_data"]), sheet_name=target_sheet, header=header-1)
 
         st.subheader("🔍 Filtros de Visualização")
-        cols_para_ver = st.multiselect("Quais campos deseja visualizar?", df.columns.tolist(), default=df.columns.tolist())
+        cols_para_ver = st.multiselect("Quais campos deseja visualizar?", df.columns.tolist(), default=df.columns.tolist(), key="cols_ver_op2")
         
         col_filtro, val_filtro = st.columns(2)
         with col_filtro: filtro_col = st.selectbox("Coluna para buscar:", df.columns, key="filtro_col_op2")
@@ -352,7 +361,7 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
             if not valores_antigos_str: valores_antigos_str = "Vazio"
             st.info(f"📌 **Valor(es) atual(is) / antigo(s)** no campo **'{col_target}'** para os registros selecionados: **{valores_antigos_str}**")
             
-            # Limpeza preventiva ANTES de instanciar o text_input
+            # Limpeza preventiva ANTES de instanciar o text_input para evitar erro do Streamlit
             if st.session_state.get('limpar_input', False):
                 st.session_state['novo_val_op2'] = ""
                 st.session_state['limpar_input'] = False
@@ -368,7 +377,6 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                     "vl_busca": ", ".join(filtro_vals) if filtro_vals else "Todos",
                     "aba": target_sheet
                 })
-                # Ativa a flag para limpar na próxima execução (evita o erro do Streamlit)
                 st.session_state['limpar_input'] = True
                 st.success("Modificação adicionada à fila!")
                 st.rerun()
@@ -400,7 +408,7 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
 elif menu_opcao == "GERAR RELATORIOS":
     titulo_estilizado("Gerar Relatórios")
     st.write("Clique abaixo para zerar os arquivos salvos em memória e começar um novo ciclo.")
-    if st.button("🗑️ Limpar Dados da Memória"):
+    if st.button("🗑️ Limpar Dados da Memória", key="btn_limpar_memo_op3"):
         st.session_state['source_df'] = None
         st.session_state['wb_data'] = None
         st.session_state['last_dest_name'] = None
@@ -448,3 +456,4 @@ elif menu_opcao == "SAIR DO SISTEMA":
     titulo_estilizado("Sessão Encerrada")
     st.info("Você pode fechar esta aba do navegador com segurança.")
     st.stop()
+    
