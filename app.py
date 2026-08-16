@@ -194,6 +194,7 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
     # ...
 
 # --- OPÇÃO 2 ---
+# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS ---
 elif menu_opcao == "ATUALIZAÇÕES GERAIS":
     titulo_estilizado("Atualizações Gerais")
     
@@ -216,7 +217,7 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         
         df = pd.read_excel(io.BytesIO(st.session_state["wb_data"]), sheet_name=target_sheet, header=header-1)
         
-        # Filtros e Editor...
+        st.subheader("🔍 Filtros de Visualização")
         col_filtro = st.selectbox("Coluna para buscar:", df.columns, key="filtro_col_op2")
         valores_existentes = sorted([str(v) for v in df[col_filtro].dropna().unique()])
         filtro_vals = st.multiselect("Selecione o(s) valor(es) para filtrar:", valores_existentes, key="filtro_vals_op2")
@@ -224,15 +225,37 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         df_view = df.copy()
         if filtro_vals: df_view = df_view[df_view[col_filtro].astype(str).isin(filtro_vals)]
         
+        st.metric("Total de Registros Encontrados", len(df_view))
+        
+        # --- BOTÕES DE MARCAÇÃO ---
+        if 'select_all' not in st.session_state: st.session_state['select_all'] = False
+        
+        cols_btns = st.columns([1, 1, 4])
+        with cols_btns[0]:
+            if st.button("✅ Marcar Todos"): 
+                st.session_state['select_all'] = True; st.rerun()
+        with cols_btns[1]:
+            if st.button("❌ Desmarcar Todos"): 
+                st.session_state['select_all'] = False; st.rerun()
+        
+        # --- EDITOR ---
+        st.subheader("✏️ Seleção para Atualizar")
         df_for_edit = df_view.copy()
-        df_for_edit.insert(0, "Atualizar?", False)
-        df_editado = st.data_editor(df_for_edit, column_config={"Atualizar?": st.column_config.CheckboxColumn()}, use_container_width=True, key="editor_op2")
+        df_for_edit.insert(0, "Atualizar?", st.session_state['select_all'])
+        
+        df_editado = st.data_editor(
+            df_for_edit, 
+            column_config={"Atualizar?": st.column_config.CheckboxColumn()}, 
+            use_container_width=True, 
+            key="editor_op2"
+        )
         
         selecionados = df_editado[df_editado["Atualizar?"] == True]
+        st.metric("Total de Registros Marcados", len(selecionados))
         
         if not selecionados.empty:
             col_target = st.selectbox("Selecione a coluna que deseja alterar:", df.columns, key="col_target_op2")
-            novo_val = st.text_input("Digite o novo valor:", key="novo_val_op2")
+            novo_val = st.text_input("Digite o novo valor (Data, Número ou Texto):", key="novo_val_op2")
             
             if st.button("➕ Adicionar à Fila de Modificações", key="btn_add_fila"):
                 st.session_state['fila_modificacoes'].append({
@@ -244,13 +267,14 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                     "aba": target_sheet
                 })
                 st.session_state['novo_val_op2'] = "" # Limpa o campo
-                st.rerun()
+                st.success("Modificação adicionada à fila!"); st.rerun()
 
         if st.session_state['fila_modificacoes']:
-            # ... [Exibição da fila e Botão de Download] ...
+            st.markdown("---")
+            st.subheader("📋 Fila de Modificações Pendentes")
+            # [Lógica da tabela da fila e botão de download permanece igual...]
             file_bytes = gerar_arquivo_atualizado_bytes(io.BytesIO(st.session_state["wb_data"]), header, st.session_state['fila_modificacoes'], df, sheet_name=target_sheet)
             st.download_button("📥 Baixar Arquivo Atualizado", file_bytes, "sinale_atualizado_final.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
 # --- OPÇÕES 3, 4 e 5 ---
 elif menu_opcao == "GERAR RELATORIOS":
     titulo_estilizado("Gerar Relatórios")
