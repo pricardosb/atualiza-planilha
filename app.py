@@ -256,18 +256,31 @@ elif menu_opcao == "INFORMAÇÕES GERAIS":
             st.write(f"- **Linha de cabeçalho:** {header_sinale}")
             
             st.write("---")
-            st.subheader("👁️ Seleção de Colunas para Visualização")
-            colunas_selecionadas = st.multiselect(
-                "Escolha quais colunas deseja exibir na prévia:",
-                options=list(df_info.columns),
-                default=list(df_info.columns)
-            )
+            st.subheader("🔍 Pesquisa e Seleção de Registros")
+            col_busca_info = st.selectbox("Coluna identificadora para busca:", df_info.columns, key="col_busca_info")
             
-            st.subheader("📋 Prévia dos Dados da Aba Selecionada")
-            if colunas_selecionadas:
-                st.dataframe(df_info[colunas_selecionadas].head(10), use_container_width=True)
+            opcoes_selecao_info = [f"{val} (Linha {idx})" for idx, val in df_info[col_busca_info].items()]
+            selected_options_info = st.multiselect("🔍 Escolha/Pesquise os registros:", opcoes_selecao_info, key="sel_opts_info")
+            selected_indices_info = [int(item.split("(Linha ")[1].replace(")", "")) for item in selected_options_info]
+
+            if selected_indices_info:
+                st.info(f"📊 **{len(selected_indices_info)}** registro(s) selecionado(s).")
+                
+                st.subheader("👁️ Seleção de Colunas para Exibição")
+                colunas_selecionadas = st.multiselect(
+                    "Escolha quais colunas deseja visualizar nos registros selecionados:",
+                    options=list(df_info.columns),
+                    default=list(df_info.columns),
+                    key="cols_sel_info"
+                )
+                
+                if colunas_selecionadas:
+                    df_filtrado = df_info.loc[selected_indices_info, colunas_selecionadas]
+                    st.dataframe(df_filtrado, use_container_width=True)
+                else:
+                    st.warning("Selecione pelo menos uma coluna para visualizar os dados.")
             else:
-                st.warning("Selecione pelo menos uma coluna para visualizar a prévia.")
+                st.info("💡 Selecione um ou mais registros acima para pesquisar e visualizar os detalhes.")
         except Exception as e:
             st.error(f"Erro ao processar a planilha selecionada: {e}")
 
