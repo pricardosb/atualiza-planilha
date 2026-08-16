@@ -44,6 +44,25 @@ def extrair_valor_limpo(df, idx, col_name):
     except Exception:
         return None
 
+def titulo_estilizado(subtitulo=""):
+    html_content = f"""
+    <div style='text-align: center; padding: 1.8rem; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 6px 12px rgba(0,0,0,0.15);'>
+        <h1 style='color: white; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; font-weight: 800; font-size: 2.2rem; margin: 0; letter-spacing: 1.5px; text-transform: uppercase;'>
+            ⚡ SINALE WEB
+        </h1>
+        <p style='color: #e0e6ed; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; font-weight: 300; font-size: 1.15rem; margin-top: 6px; letter-spacing: 2px; text-transform: uppercase;'>
+            — Em Busca de Agilidade —
+        </p>
+    </div>
+    """
+    if subtitulo:
+        html_content += f"""
+        <div style='margin-bottom: 1.5rem;'>
+            <h3 style='color: #2a5298; border-bottom: 2px solid #2a5298; padding-bottom: 5px; font-weight: 600;'>{subtitulo}</h3>
+        </div>
+        """
+    st.markdown(html_content, unsafe_allow_html=True)
+
 # --- MENU DE BARRA LATERAL ---
 st.sidebar.title("📌 Menu de Opções")
 menu_opcao = st.sidebar.radio(
@@ -64,8 +83,7 @@ if menu_opcao == "SAIR DO SISTEMA":
 
 # --- ROTEAMENTO DAS OPÇÕES ---
 if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
-    st.title("⚡ SINALE WEB - EM BUSCA DE AGILIDADE")
-    st.subheader("Rotina: Inclusão de Trabalho")
+    titulo_estilizado("Rotina: Inclusão de Trabalho")
 
     # --- CARREGAMENTO ---
     col1, col2 = st.columns(2)
@@ -204,8 +222,7 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
             st.download_button("📥 Baixar Arquivo Atualizado", buffer.getvalue(), "sinale_atualizado.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 elif menu_opcao == "INFORMAÇÕES GERAIS":
-    st.title("⚡ SINALE WEB - EM BUSCA DE AGILIDADE")
-    st.subheader("📋 Informações Gerais do Sistema SINALE")
+    titulo_estilizado("Informações Gerais do Sistema SINALE")
     st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para obter este arquivo.")
     
     sinale_file = st.file_uploader("Selecione o arquivo exportado do SINALE (.xlsx)", type=["xlsx"], key="sinale_info_upload")
@@ -224,8 +241,7 @@ elif menu_opcao == "INFORMAÇÕES GERAIS":
         st.write(f"- **Linha de cabeçalho informada:** {header_sinale}")
 
 elif menu_opcao == "ATUALIZAR DADOS":
-    st.title("⚡ SINALE WEB - EM BUSCA DE AGILIDADE")
-    st.subheader("🔄 Atualizar Dados do SINALE")
+    titulo_estilizado("Atualizar Dados do SINALE")
     st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para obter este arquivo.")
     
     sinale_file_upd = st.file_uploader("Selecione o arquivo do SINALE para atualizar (.xlsx)", type=["xlsx"], key="sinale_upd_upload")
@@ -247,8 +263,7 @@ elif menu_opcao == "ATUALIZAR DADOS":
             st.download_button("📥 Baixar Arquivo SINALE Atualizado", buffer.getvalue(), "sinale_atualizado_dados.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 elif menu_opcao == "LIMPAR ARQUIVO":
-    st.title("⚡ SINALE WEB - EM BUSCA DE AGILIDADE")
-    st.subheader("🧹 Limpar Arquivo do SINALE")
+    titulo_estilizado("Limpar Arquivo do SINALE")
     st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para obter este arquivo.")
     
     sinale_file_clean = st.file_uploader("Selecione o arquivo do SINALE para limpeza (.xlsx)", type=["xlsx"], key="sinale_clean_upload")
@@ -270,8 +285,7 @@ elif menu_opcao == "LIMPAR ARQUIVO":
             st.download_button("📥 Baixar Arquivo Limpo", buffer.getvalue(), "sinale_limpo.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
-    st.title("⚡ SINALE WEB - EM BUSCA DE AGILIDADE")
-    st.subheader("👷 Somente Trabalhadores Ativos")
+    titulo_estilizado("Somente Trabalhadores Ativos")
     st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para obter este arquivo.")
     
     sinale_file_active = st.file_uploader("Selecione o arquivo do SINALE para filtragem (.xlsx)", type=["xlsx"], key="sinale_active_upload")
@@ -290,16 +304,12 @@ elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
             val_ativo = st.text_input("Informe o texto que define o trabalhador ATIVO:", value="ATIVO", key="val_ativo_input")
             
             if st.button("🚀 Filtrar Apenas Ativos e Baixar"):
-                # Filtra as linhas de baixo para cima mantendo a formatação
-                # Vamos ler os valores da planilha linha por linha a partir de header_active + 1
                 linhas_para_remover = []
                 for r in range(header_active + 1, ws_a.max_row + 1):
                     val_celula = ws_a.cell(row=r, column=list(df_preview.columns).index(col_status) + 1).value
-                    # Compara string convertendo para maiúsculo
                     if val_celula is None or str(val_ativo).strip().upper() not in str(val_celula).strip().upper():
                         linhas_para_remover.append(r)
                 
-                # Remove de trás para frente para não alterar índices das linhas anteriores
                 for r in sorted(linhas_para_remover, reverse=True):
                     ws_a.delete_rows(r, 1)
                 
