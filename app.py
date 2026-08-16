@@ -174,7 +174,6 @@ menu_opcao = st.sidebar.radio("Selecione a rotina:", [
 if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
     titulo_estilizado("INTEGRADOR ==> DADOS GERAIS DO INTERNO >>> SINALE")
     
-   
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("1. Arquivo de ORIGEM")
@@ -258,7 +257,6 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
 
             for idx in selected_indices:
                 seq_val += 1
-                # CORREÇÃO AQUI: Atualiza dinamicamente para copiar a formatação da linha imediatamente anterior
                 ref_row_idx = current_row - 1
                 
                 for col_idx in range(1, ws.max_column + 1):
