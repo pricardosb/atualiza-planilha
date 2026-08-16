@@ -8,7 +8,7 @@ from copy import copy
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="SINALE WEB", layout="wide")
 
-# --- FUNÇÕES DE SUPORTE ---
+# --- FUNÇÕES DE SUPORTE (ORIGINAIS) ---
 def copiar_estilo_completo(origem, destino):
     if origem.has_style:
         destino.font = copy(origem.font); destino.border = copy(origem.border)
@@ -48,7 +48,7 @@ menu_opcao = st.sidebar.radio("Selecione a rotina:", [
     "SAIR DO SISTEMA"
 ])
 
-# --- OPÇÃO 1: INCLUSÃO DE TRABALHO (ORIGINAL PRESERVADA) ---
+# --- OPÇÃO 1: INCLUSÃO DE TRABALHO (ORIGINAL) ---
 if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
     titulo_estilizado("Rotina: Inclusão de Trabalho")
     col1, col2 = st.columns(2)
@@ -115,7 +115,7 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
             buffer = io.BytesIO(); wb.save(buffer)
             st.success("Processado!"); st.download_button("📥 Baixar", buffer.getvalue(), "sinale_atualizado.xlsx")
 
-# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS (COM BUSCA AUTOMÁTICA) ---
+# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS ---
 elif menu_opcao == "ATUALIZAÇÕES GERAIS":
     titulo_estilizado("Atualizações Gerais")
     sinale_file = st.file_uploader("Selecione o arquivo do SINALE (.xlsx)", type=["xlsx"])
@@ -130,37 +130,40 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         st.subheader("🔍 Filtros de Visualização")
         cols_para_ver = st.multiselect("Quais campos deseja visualizar?", df.columns.tolist(), default=df.columns.tolist())
         
-        # Filtro com valores existentes na coluna
         col_filtro, val_filtro = st.columns(2)
-        with col_filtro: 
-            filtro_col = st.selectbox("Coluna para buscar:", df.columns)
-        
-        # Puxa valores únicos da coluna escolhida
+        with col_filtro: filtro_col = st.selectbox("Coluna para buscar:", df.columns)
         valores_existentes = sorted([str(v) for v in df[filtro_col].dropna().unique()])
+        with val_filtro: filtro_vals = st.multiselect("Selecione o(s) valor(es) para filtrar:", valores_existentes)
         
-        with val_filtro: 
-            filtro_vals = st.multiselect("Selecione o(s) valor(es) para filtrar:", valores_existentes)
-        
-        # Filtra o DF baseado na seleção
         df_view = df.copy()
         if filtro_vals:
             df_view = df_view[df_view[filtro_col].astype(str).isin(filtro_vals)]
+        
+        st.metric("Total de Registros Encontrados", len(df_view))
         
         st.dataframe(df_view[cols_para_ver], use_container_width=True)
         
         # 2. SELEÇÃO PARA ATUALIZAÇÃO
         st.subheader("✏️ Seleção para Atualizar")
-        st.info("Marque as linhas que deseja atualizar abaixo:")
         
+        if 'select_all' not in st.session_state: st.session_state['select_all'] = False
+        
+        cols_btns = st.columns([1, 1, 4])
+        with cols_btns[0]:
+            if st.button("✅ Marcar Todos"): st.session_state['select_all'] = True
+        with cols_btns[1]:
+            if st.button("❌ Desmarcar Todos"): st.session_state['select_all'] = False
+            
         df_for_edit = df_view.copy()
-        df_for_edit.insert(0, "Atualizar?", False)
+        df_for_edit.insert(0, "Atualizar?", st.session_state['select_all'])
         
         df_editado = st.data_editor(df_for_edit, column_config={"Atualizar?": st.column_config.CheckboxColumn()}, use_container_width=True)
         
-        # 3. ATUALIZAÇÃO
+        # 3. CONTAGEM E ATUALIZAÇÃO
         selecionados = df_editado[df_editado["Atualizar?"] == True]
+        st.metric("Total de Registros Marcados", len(selecionados))
+        
         if not selecionados.empty:
-            st.write(f"Total de linhas selecionadas: {len(selecionados)}")
             col_target = st.selectbox("Selecione a coluna que deseja alterar:", df.columns)
             novo_val = st.text_input("Digite o novo valor:")
             
