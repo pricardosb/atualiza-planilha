@@ -8,11 +8,14 @@ from copy import copy
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="SINALE WEB", layout="wide")
 
-# --- FUNÇÕES DE SUPORTE ---
+# --- FUNÇÕES DE SUPORTE (ORIGINAIS) ---
 def copiar_estilo_completo(origem, destino):
     if origem.has_style:
-        destino.font = copy(origem.font); destino.border = copy(origem.border)
-        destino.fill = copy(origem.fill); destino.number_format = copy(origem.number_format)
+        destino.font = copy(origem.font)
+        destino.border = copy(origem.border)
+        destino.fill = copy(origem.fill)
+        destino.number_format = copy(origem.number_format)
+        destino.protection = copy(origem.protection)
         destino.alignment = copy(origem.alignment)
 
 def deduplicar_colunas(colunas):
@@ -33,11 +36,17 @@ def extrair_valor_limpo(df, idx, col_name):
         val = df.iloc[idx][col_name]
         if isinstance(val, pd.Series): val = val.iloc[0]
         if pd.isna(val): return None
-        return val.item() if hasattr(val, 'item') else val
-    except: return None
+        if hasattr(val, 'item'): val = val.item()
+        return val
+    except Exception: return None
 
 def titulo_estilizado(subtitulo=""):
-    st.markdown(f"<div style='text-align: center; padding: 1.5rem; background: #2a5298; color: white; border-radius: 10px; margin-bottom: 1rem;'><h1>⚡ SINALE WEB</h1><p>{subtitulo}</p></div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div style='text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border-radius: 12px; margin-bottom: 1.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>"
+        f"<h1 style='margin:0;'>⚡ SINALE WEB</h1>"
+        f"<p style='margin:0; font-size: 1.1rem; opacity: 0.9;'>{subtitulo}</p>"
+        f"</div>", unsafe_allow_html=True
+    )
 
 # --- MENU ---
 menu_opcao = st.sidebar.radio("Selecione a rotina:", [
@@ -48,7 +57,7 @@ menu_opcao = st.sidebar.radio("Selecione a rotina:", [
     "SAIR DO SISTEMA"
 ])
 
-# --- OPÇÃO 1: INCLUSÃO DE TRABALHO (ORIGINAL) ---
+# --- OPÇÃO 1: INCLUSÃO DE TRABALHO (CÓDIGO ORIGINAL COMPLETO) ---
 if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
     titulo_estilizado("Rotina: Inclusão de Trabalho")
     col1, col2 = st.columns(2)
@@ -71,30 +80,59 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
                 raw.columns = deduplicar_colunas(raw.columns) if origem_tem_cabecalho else [f"Col {i+1}" for i in range(len(raw.columns))]
                 st.session_state["source_df"] = raw
                 st.session_state["last_cache_key_src"] = cache_key_src
-            except: st.error("Erro ao ler arquivo de origem.")
+            except: st.error("Erro ao ler arquivo.")
+
+    if dest_file:
+        if "wb_data" not in st.session_state or st.session_state.get("last_dest_name") != dest_file.name:
+            dest_file.seek(0)
+            st.session_state["wb_data"] = dest_file.getvalue()
+            st.session_state["last_dest_name"] = dest_file.name
 
     df_origem = st.session_state.get("source_df")
-    if dest_file and "wb_data" not in st.session_state:
-        dest_file.seek(0)
-        st.session_state["wb_data"] = dest_file.getvalue()
+    wb_data = st.session_state.get("wb_data")
 
-    if df_origem is not None and "wb_data" in st.session_state:
-        wb = load_workbook(io.BytesIO(st.session_state["wb_data"]))
+    if df_origem is not None and wb_data is not None:
+        wb = load_workbook(io.BytesIO(wb_data))
         target_sheet = st.selectbox("Escolha a ABA:", wb.sheetnames)
         ws = wb[target_sheet]
-        col_busca = st.selectbox("Coluna identificadora:", df_origem.columns)
-        selected_options = st.multiselect("🔍 Escolha os registros:", [f"{val} (Linha {idx})" for idx, val in df_origem[col_busca].items()])
-        selected_indices = [int(item.split("(Linha ")[1].replace(")", "")) for item in selected_options]
         
-        if st.button("🚀 Processar e Atualizar"):
-            for idx in selected_indices:
-                new_row = ws.max_row + 1
-                for c in range(1, ws.max_column + 1):
-                    ws.cell(row=new_row, column=c, value=extrair_valor_limpo(df_origem, idx, df_origem.columns[c-1] if c-1 < len(df_origem.columns) else None))
-            buffer = io.BytesIO(); wb.save(buffer)
-            st.download_button("📥 Baixar Atualizado", buffer.getvalue(), "sinale_incluido.xlsx")
+        st.subheader("3. Seleção de Registros")
+        col_busca = st.selectbox("Coluna identificadora:", df_origem.columns)
+        opcoes_selecao = [f"{val} (Linha {idx})" for idx, val in df_origem[col_busca].items()]
+        selected_options = st.multiselect("🔍 Escolha os registros:", opcoes_selecao)
+        selected_indices = [int(item.split("(Linha ")[1].replace(")", "")) for item in selected_options]
 
-# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS (NOVA) ---
+        st.subheader("4. Correlação ORIGEM X DESTINO")
+        mapping = {}
+        cols_ui = st.columns(4)
+        opcoes_mapeamento = ["--- Não mapear ---", "⚠️ Auto-incrementar (Seq)"] + list(df_origem.columns)
+        for i in range(1, ws.max_column + 1):
+            header_val = ws.cell(row=header_dest, column=i).value
+            with cols_ui[(i-1) % 4]:
+                map_val = st.selectbox(f"Col {i} ({header_val or 'S/ Título'})", opcoes_mapeamento, key=f"map_{i}")
+                if map_val != "--- Não mapear ---": mapping[i] = map_val
+
+        if st.button("🚀 Processar e Atualizar"):
+            ref_row_idx = ws.max_row
+            seq_val = int(ws.cell(row=ref_row_idx, column=1).value) if ws.cell(row=ref_row_idx, column=1).value else 0
+            
+            for idx in selected_indices:
+                seq_val += 1
+                new_row = ws.max_row + 1
+                for col_idx in range(1, ws.max_column + 1):
+                    target_cell = ws.cell(row=new_row, column=col_idx)
+                    ref_cell = ws.cell(row=ref_row_idx, column=col_idx)
+                    copiar_estilo_completo(ref_cell, target_cell)
+                    
+                    if col_idx == 1 or mapping.get(col_idx) == "⚠️ Auto-incrementar (Seq)":
+                        target_cell.value = seq_val
+                    elif col_idx in mapping:
+                        target_cell.value = extrair_valor_limpo(df_origem, idx, mapping[col_idx])
+            
+            buffer = io.BytesIO(); wb.save(buffer)
+            st.success("Processado!"); st.download_button("📥 Baixar", buffer.getvalue(), "sinale_atualizado.xlsx")
+
+# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS ---
 elif menu_opcao == "ATUALIZAÇÕES GERAIS":
     titulo_estilizado("Atualizações Gerais de Dados")
     sinale_file = st.file_uploader("Selecione o arquivo do SINALE (.xlsx)", type=["xlsx"])
@@ -108,7 +146,7 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         
         tab1, tab2 = st.tabs(["📊 Visualizar/Pesquisar", "✏️ Atualizar Dados"])
         with tab1:
-            st.dataframe(df)
+            st.dataframe(df, use_container_width=True)
         with tab2:
             cabecalhos = {str(ws.cell(row=header, column=c).value).strip(): c for c in range(1, ws.max_column + 1)}
             dados_tabela = []
@@ -119,7 +157,7 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                 dados_tabela.append(row)
             
             df_edit = pd.DataFrame(dados_tabela)
-            df_selecionado = st.data_editor(df_edit, column_config={"Selecionar": st.column_config.CheckboxColumn()})
+            df_selecionado = st.data_editor(df_edit, column_config={"Selecionar": st.column_config.CheckboxColumn()}, hide_index=True)
             
             linhas_alvo = df_selecionado[df_selecionado["Selecionar"] == True]["_linha"].tolist()
             if linhas_alvo:
@@ -133,8 +171,8 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
 
 # --- OUTRAS OPÇÕES ---
 elif menu_opcao == "LIMPAR ARQUIVO":
-    st.write("Função de limpeza ativa.")
+    st.write("Funcionalidade de Limpar Arquivo...")
 elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
-    st.write("Função de filtro ativa.")
+    st.write("Funcionalidade de Filtro de Ativos...")
 elif menu_opcao == "SAIR DO SISTEMA":
     st.stop()
