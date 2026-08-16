@@ -63,6 +63,13 @@ def titulo_estilizado(subtitulo=""):
         """
     st.markdown(html_content, unsafe_allow_html=True)
 
+def aviso_sinale():
+    st.markdown("""
+    <div style='background-color: #f8f9fa; border-left: 4px solid #2a5298; padding: 12px 16px; border-radius: 6px; margin-bottom: 1.5rem; color: #333; font-family: "Segoe UI", sans-serif; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>
+        ⚠️ <b>Atenção:</b> É preciso ter acesso ao sistema <b>SINALE</b> para obter este arquivo.
+    </div>
+    """, unsafe_allow_html=True)
+
 # --- MENU DE BARRA LATERAL ---
 st.sidebar.title("📌 Menu de Opções")
 menu_opcao = st.sidebar.radio(
@@ -223,7 +230,7 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
 
 elif menu_opcao == "INFORMAÇÕES GERAIS":
     titulo_estilizado("Informações Gerais do Sistema SINALE")
-    st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para obter este arquivo.")
+    aviso_sinale()
     
     sinale_file = st.file_uploader("Selecione o arquivo exportado do SINALE (.xlsx)", type=["xlsx"], key="sinale_info_upload")
     header_sinale = st.number_input("Linha do cabeçalho no arquivo SINALE:", value=11, min_value=1, key="hdr_sinale_info")
@@ -242,7 +249,7 @@ elif menu_opcao == "INFORMAÇÕES GERAIS":
 
 elif menu_opcao == "ATUALIZAR DADOS":
     titulo_estilizado("Atualizar Dados do SINALE")
-    st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para obter este arquivo.")
+    aviso_sinale()
     
     sinale_file_upd = st.file_uploader("Selecione o arquivo do SINALE para atualizar (.xlsx)", type=["xlsx"], key="sinale_upd_upload")
     header_upd = st.number_input("Linha do cabeçalho no arquivo SINALE:", value=11, min_value=1, key="hdr_sinale_upd")
@@ -264,7 +271,7 @@ elif menu_opcao == "ATUALIZAR DADOS":
 
 elif menu_opcao == "LIMPAR ARQUIVO":
     titulo_estilizado("Limpar Arquivo do SINALE")
-    st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para obter este arquivo.")
+    aviso_sinale()
     
     sinale_file_clean = st.file_uploader("Selecione o arquivo do SINALE para limpeza (.xlsx)", type=["xlsx"], key="sinale_clean_upload")
     header_clean = st.number_input("Linha do cabeçalho no arquivo SINALE:", value=11, min_value=1, key="hdr_sinale_clean")
@@ -286,7 +293,7 @@ elif menu_opcao == "LIMPAR ARQUIVO":
 
 elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
     titulo_estilizado("Somente Trabalhadores Ativos")
-    st.info("⚠️ **Atenção:** É preciso ter acesso ao sistema **SINALE** para obter este arquivo.")
+    aviso_sinale()
     
     sinale_file_active = st.file_uploader("Selecione o arquivo do SINALE para filtragem (.xlsx)", type=["xlsx"], key="sinale_active_upload")
     header_active = st.number_input("Linha do cabeçalho no arquivo SINALE:", value=11, min_value=1, key="hdr_sinale_active")
