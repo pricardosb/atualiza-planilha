@@ -61,6 +61,54 @@ def converter_valor_inteligente(val_str, dtype_original):
     
     return val_str
 
+def gerar_arquivo_atualizado_bytes(uploaded_file, header, fila, df_original):
+    uploaded_file.seek(0)
+    wb = load_workbook(uploaded_file)
+    ws = wb[wb.sheetnames[0]]
+    
+    red_font = Font(color="FF0000")
+    rem_col_idx = None
+    for idx_c, c_name in enumerate(df_original.columns):
+        if str(c_name).strip().upper() == 'REM':
+            rem_col_idx = idx_c + 1
+            break
+            
+    for mod in fila:
+        col_target = mod["coluna"]
+        novo_val = mod["novo_valor"]
+        valor_convertido = converter_valor_inteligente(novo_val, df_original[col_target].dtype)
+        
+        is_rz = col_target.strip().upper() in ['RZ', 'R.Z.']
+        is_saida = col_target.strip().upper() in ['SAIDA', 'SAÍDA']
+        
+        for idx in mod["indices"]:
+            excel_row = idx + header + 1
+            col_alvo_idx = df_original.columns.get_loc(col_target) + 1
+            
+            ws.cell(row=excel_row, column=col_alvo_idx, value=valor_convertido)
+            
+            if is_rz and rem_col_idx is not None:
+                try:
+                    num_rz = float(str(valor_convertido).replace(',', '.'))
+                    if num_rz >= 3:
+                        rem_val = int(num_rz // 3)
+                        ws.cell(row=excel_row, column=rem_col_idx, value=rem_val)
+                except:
+                    pass
+                    
+            if is_saida:
+                for c_idx in range(1, ws.max_column + 1):
+                    cell_obj = ws.cell(row=excel_row, column=c_idx)
+                    cur_font = cell_obj.font
+                    if cur_font:
+                        cell_obj.font = Font(name=cur_font.name, size=cur_font.size, bold=cur_font.bold, italic=cur_font.italic, color="FF0000")
+                    else:
+                        cell_obj.font = red_font
+                        
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
 def titulo_estilizado(subtitulo=""):
     st.markdown(f"<div style='text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border-radius: 12px; margin-bottom: 1.5rem;'><h1>⚡ SINALE WEB</h1><p>{subtitulo}</p></div>", unsafe_allow_html=True)
 
@@ -147,15 +195,12 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
     header = st.number_input("Linha do cabeçalho:", value=11, min_value=1)
     
     if sinale_file:
-        # Inicializa a fila na session_state se não existir ou se trocar de arquivo
         if 'fila_modificacoes' not in st.session_state:
             st.session_state['fila_modificacoes'] = []
         if 'last_sinale_name' not in st.session_state or st.session_state['last_sinale_name'] != sinale_file.name:
             st.session_state['fila_modificacoes'] = []
             st.session_state['last_sinale_name'] = sinale_file.name
 
-        wb = load_workbook(sinale_file)
-        ws = wb[wb.sheetnames[0]]
         df = pd.read_excel(sinale_file, header=header-1)
         
         # 1. VISUALIZAÇÃO E PESQUISA INTELIGENTE
@@ -213,10 +258,10 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                     "coluna": col_target,
                     "novo_valor": novo_val
                 })
-                st.success("Modificação adicionada à fila com sucesso! Você pode continuar fazendo novas modificações.")
+                st.success("Modificação adicionada à fila com sucesso! O arquivo foi atualizado automaticamente em segundo plano.")
                 st.rerun()
 
-        # 4. EXIBIÇÃO DA FILA E PROCESSAMENTO FINAL
+        # 4. EXIBIÇÃO DA FILA E BOTÃO DE DOWNLOAD PRONTO
         if st.session_state['fila_modificacoes']:
             st.markdown("---")
             st.subheader("📋 Fila de Modificações Pendentes")
@@ -233,55 +278,14 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                     st.session_state['fila_modificacoes'] = []
                     st.rerun()
             with col_f2:
-                if st.button("🚀 Processar Todas e Baixar Arquivo Final"):
-                    red_font = Font(color="FF0000")
-                    
-                    # Identificação da coluna REM para a regra de negócio
-                    rem_col_idx = None
-                    for idx_c, c_name in enumerate(df.columns):
-                        if str(c_name).strip().upper() == 'REM':
-                            rem_col_idx = idx_c + 1
-                            break
-                    
-                    for mod in st.session_state['fila_modificacoes']:
-                        col_target = mod["coluna"]
-                        novo_val = mod["novo_valor"]
-                        valor_convertido = converter_valor_inteligente(novo_val, df[col_target].dtype)
-                        
-                        is_rz = col_target.strip().upper() in ['RZ', 'R.Z.']
-                        is_saida = col_target.strip().upper() in ['SAIDA', 'SAÍDA']
-                        
-                        for idx in mod["indices"]:
-                            excel_row = idx + header + 1
-                            col_alvo_idx = df.columns.get_loc(col_target) + 1
-                            
-                            # Atualiza o campo principal
-                            ws.cell(row=excel_row, column=col_alvo_idx, value=valor_convertido)
-                            
-                            # REGRA 2: Se RZ >= 3, atualiza REM com divisão inteira por 3
-                            if is_rz and rem_col_idx is not None:
-                                try:
-                                    num_rz = float(str(valor_convertido).replace(',', '.'))
-                                    if num_rz >= 3:
-                                        rem_val = int(num_rz // 3)
-                                        ws.cell(row=excel_row, column=rem_col_idx, value=rem_val)
-                                except:
-                                    pass
-                                    
-                            # REGRA 1: Se o campo alterado for SAÍDA, deixa os caracteres da linha inteira em vermelho
-                            if is_saida:
-                                for c_idx in range(1, ws.max_column + 1):
-                                    cell_obj = ws.cell(row=excel_row, column=c_idx)
-                                    cur_font = cell_obj.font
-                                    if cur_font:
-                                        cell_obj.font = Font(name=cur_font.name, size=cur_font.size, bold=cur_font.bold, italic=cur_font.italic, color="FF0000")
-                                    else:
-                                        cell_obj.font = red_font
-                    
-                    buffer = io.BytesIO()
-                    wb.save(buffer)
-                    st.success("Todas as modificações foram processadas com sucesso!")
-                    st.download_button("📥 Baixar Arquivo Atualizado Final", buffer.getvalue(), "sinale_atualizado_final.xlsx")
+                # Gera o arquivo atualizado automaticamente ao renderizar o botão de download
+                file_bytes = gerar_arquivo_atualizado_bytes(sinale_file, header, st.session_state['fila_modificacoes'], df)
+                st.download_button(
+                    label="📥 Baixar Arquivo Atualizado",
+                    data=file_bytes,
+                    file_name="sinale_atualizado_final.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
 # --- OUTRAS OPÇÕES ---
 elif menu_opcao == "LIMPAR ARQUIVO":
