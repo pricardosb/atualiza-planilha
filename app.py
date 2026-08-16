@@ -155,7 +155,6 @@ def gerar_arquivo_atualizado_bytes(source_input, header, fila, df_original):
     wb.save(buffer)
     file_bytes = buffer.getvalue()
     
-    # Atualiza o estado global com o arquivo modificado
     st.session_state["wb_data"] = file_bytes
     return file_bytes
 
@@ -173,7 +172,7 @@ menu_opcao = st.sidebar.radio("Selecione a rotina:", [
 
 # --- OPÇÃO 1 ---
 if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
-    titulo_estilizado("Rotina: Inclusão de Trabalho")
+    titulo_estilizado("INTEGRADOR ==> DADOS GERAIS DO INTERNO >>> SINALE")
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("1. Arquivo de ORIGEM")
@@ -207,14 +206,20 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
 
     if df_origem is not None and wb_data is not None:
         wb = load_workbook(io.BytesIO(wb_data))
-        target_sheet = st.selectbox("Escolha a ABA:", wb.sheetnames)
+        target_sheet = st.selectbox("Escolha a ABA na Planilha de Destino a ser Atualizada:", wb.sheetnames)
         ws = wb[target_sheet]
+
         st.subheader("3. Seleção de Registros")
-        col_busca = st.selectbox("Coluna identificadora:", df_origem.columns)
+        col_busca = st.selectbox("Coluna identificadora (para seleção):", df_origem.columns)
         opcoes_selecao = [f"{val} (Linha {idx})" for idx, val in df_origem[col_busca].items()]
         selected_options = st.multiselect("🔍 Escolha os registros:", opcoes_selecao)
         selected_indices = [int(item.split("(Linha ")[1].replace(")", "")) for item in selected_options]
-        st.subheader("4. Correlação ORIGEM X DESTINO")
+
+        if selected_indices:
+            st.info(f"📊 **{len(selected_indices)}** registro(s) selecionado(s) para atualização.")
+
+        st.write("---")
+        st.subheader("4. Correlação dos dados dos Arquivos ORIGEM X DESTINO")
         mapping = {}
         cols_ui = st.columns(4)
         opcoes_mapeamento = ["--- Não mapear ---", "⚠️ Auto-incrementar (Seq)"] + list(df_origem.columns)
@@ -223,32 +228,68 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
             with cols_ui[(i-1) % 4]:
                 map_val = st.selectbox(f"Col {i} ({header_val or 'S/ Título'})", opcoes_mapeamento, key=f"map_{i}")
                 if map_val != "--- Não mapear ---": mapping[i] = map_val
+
+        st.write("---")
+        st.subheader("5. Local da Atualização")
+        modo_insercao = st.radio("Local de inserção:", ["Final da planilha", "A partir de uma linha específica"])
+        target_row = st.number_input("Linha:", min_value=header_dest+1, value=header_dest+1) if modo_insercao == "A partir de uma linha específica" else ws.max_row + 1
+
+        st.write("---")
         if st.button("🚀 Processar e Atualizar"):
-            ref_row_idx = ws.max_row
-            seq_val = int(ws.cell(row=ref_row_idx, column=1).value) if ws.cell(row=ref_row_idx, column=1).value else 0
+            if not selected_indices: 
+                st.error("Selecione itens!")
+                st.stop()
+            
+            ref_row_idx = (target_row - 1) if modo_insercao == "A partir de uma linha específica" else ws.max_row
+            
+            base_seq = 0
+            if ref_row_idx >= header_dest:
+                val_acima = ws.cell(row=ref_row_idx, column=1).value
+                try: base_seq = int(val_acima)
+                except: base_seq = 0
+            
+            if modo_insercao == "A partir de uma linha específica":
+                ws.insert_rows(target_row, amount=len(selected_indices))
+            
+            current_row = target_row
+            seq_val = base_seq
+
             for idx in selected_indices:
                 seq_val += 1
-                new_row = ws.max_row + 1
                 for col_idx in range(1, ws.max_column + 1):
-                    target_cell = ws.cell(row=new_row, column=col_idx)
+                    target_cell = ws.cell(row=current_row, column=col_idx)
                     ref_cell = ws.cell(row=ref_row_idx, column=col_idx)
                     copiar_estilo_completo(ref_cell, target_cell)
-                    if col_idx == 1 or mapping.get(col_idx) == "⚠️ Auto-incrementar (Seq)": target_cell.value = seq_val
-                    elif col_idx in mapping: target_cell.value = extrair_valor_limpo(df_origem, idx, mapping[col_idx])
-            
-            buffer = io.BytesIO(); wb.save(buffer)
-            # Salva permanentemente no session_state para as demais opções
+                    
+                    if col_idx == 1 or mapping.get(col_idx) == "⚠️ Auto-incrementar (Seq)":
+                        target_cell.value = seq_val
+                    elif col_idx in mapping:
+                        target_cell.value = extrair_valor_limpo(df_origem, idx, mapping[col_idx])
+                    else:
+                        target_cell.value = None
+                current_row += 1
+
+            if modo_insercao == "A partir de uma linha específica":
+                for r in range(current_row, ws.max_row + 1):
+                    val_atual = ws.cell(row=r, column=1).value
+                    if val_atual is not None:
+                        seq_val += 1
+                        ws.cell(row=r, column=1, value=seq_val)
+
+            buffer = io.BytesIO()
+            wb.save(buffer)
             st.session_state["wb_data"] = buffer.getvalue()
-            st.success("Processado e salvo na memória!") 
-            st.download_button("📥 Baixar Versão Atualizada", st.session_state["wb_data"], "sinale_atualizado.xlsx")
+            st.success("✅ Processamento concluído com sucesso e salvo na memória!")
+            st.download_button("📥 Baixar Versão Atualizada", st.session_state["wb_data"], "sinale_atualizado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    else:
+        st.warning("⚠️ Carregue os arquivos de Origem e Destino para habilitar os campos.")
 
 # --- OPÇÃO 2 ---
 elif menu_opcao == "ATUALIZAÇÕES GERAIS":
     titulo_estilizado("Atualizações Gerais")
     
-    # Valida se o arquivo está na memória ou solicita o upload
     if st.session_state.get("wb_data") is not None:
-        st.info("📁 Arquivo carregado automaticamente da memória (última versão processada ou baixada).")
+        st.info("📁 Arquivo carregado automaticamente da memória.")
         sinale_file = io.BytesIO(st.session_state["wb_data"])
         
         if st.checkbox("Deseja carregar um arquivo Excel diferente manualmente?", value=False):
@@ -258,7 +299,7 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                 st.session_state['last_sinale_name'] = novo_upload.name
                 sinale_file = io.BytesIO(st.session_state["wb_data"])
     else:
-        st.warning("⚠️ Nenhum arquivo de destino encontrado na memória. Por favor, faça o upload do arquivo do SINALE abaixo ou execute a Opção 1.")
+        st.warning("⚠️ Nenhum arquivo de destino encontrado na memória. Faça o upload abaixo ou execute a Opção 1.")
         sinale_file = st.file_uploader("Selecione o arquivo do SINALE (.xlsx)", type=["xlsx"])
         if sinale_file:
             st.session_state["wb_data"] = sinale_file.getvalue()
@@ -305,16 +346,22 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         
         if not selecionados.empty:
             col_target = st.selectbox("Selecione a coluna que deseja alterar:", df.columns)
+            
+            # MOSTRA O VALOR ANTIGO ANTES DE DIGITAR O NOVO VALOR
+            valores_antigos_str = ", ".join([str(v) for v in selecionados[col_target].dropna().unique()])
+            if not valores_antigos_str:
+                valores_antigos_str = "Vazio"
+            st.info(f"📌 **Valor(es) atual(is) / antigo(s)** no campo **'{col_target}'** para os registros selecionados: **{valores_antigos_str}**")
+            
             novo_val = st.text_input("Digite o novo valor:")
             
             if st.button("➕ Adicionar à Fila de Modificações"):
-                valores_antigos_str = ", ".join([str(v) for v in selecionados[col_target].dropna().unique()])
                 vl_busca_str = ", ".join(filtro_vals) if filtro_vals else "Todos"
                 st.session_state['fila_modificacoes'].append({
                     "indices": selecionados.index.tolist(),
                     "coluna": col_target,
                     "novo_valor": novo_val,
-                    "valor_antigo": valores_antigos_str if valores_antigos_str else "Vazio",
+                    "valor_antigo": valores_antigos_str,
                     "vl_busca": vl_busca_str
                 })
                 st.success("Modificação adicionada à fila!"); st.rerun()
