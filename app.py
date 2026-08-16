@@ -46,7 +46,7 @@ def extrair_valor_limpo(df, idx, col_name):
 
 def titulo_estilizado(subtitulo=""):
     html_content = f"""
-    <div style='text-align: center; padding: 1.8rem; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 6px 12px rgba(0,0,0,0.15);'>
+    <div style='text-align: center; padding: 1.8rem; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); border-radius: 12px; margin-bottom: 1.5rem; box-shadow: 0 6px 12px rgba(0,0,0,0.15);'>
         <h1 style='color: white; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; font-weight: 800; font-size: 2.2rem; margin: 0; letter-spacing: 1.5px; text-transform: uppercase;'>
             ⚡ SINALE WEB
         </h1>
