@@ -237,16 +237,28 @@ elif menu_opcao == "INFORMAÇÕES GERAIS":
     header_sinale = st.number_input("Linha do cabeçalho no arquivo SINALE:", value=11, min_value=1, key="hdr_sinale_info")
     
     if sinale_file:
-        wb_sinale = load_workbook(sinale_file)
-        sheet_sinale = st.selectbox("Escolha a aba do arquivo SINALE:", wb_sinale.sheetnames, key="sheet_sinale_info")
-        ws_s = wb_sinale[sheet_sinale]
-        
-        st.write("---")
-        st.markdown(f"### 📊 Resumo do Arquivo")
-        st.write(f"- **Aba selecionada:** {sheet_sinale}")
-        st.write(f"- **Total de linhas na planilha:** {ws_s.max_row}")
-        st.write(f"- **Total de colunas:** {ws_s.max_column}")
-        st.write(f"- **Linha de cabeçalho informada:** {header_sinale}")
+        try:
+            wb_sinale = load_workbook(sinale_file)
+            sheet_sinale = st.selectbox("Escolha a aba do arquivo SINALE:", wb_sinale.sheetnames, key="sheet_sinale_info")
+            
+            sinale_file.seek(0)
+            df_info = pd.read_excel(sinale_file, sheet_name=sheet_sinale, header=header_sinale-1)
+            ws_s = wb_sinale[sheet_sinale]
+            
+            st.write("---")
+            st.markdown("### 📊 Resumo do Arquivo e Aba Selecionada")
+            col_i1, col_i2, col_i3 = st.columns(3)
+            col_i1.metric("Total de Linhas (Excel)", ws_s.max_row)
+            col_i2.metric("Total de Colunas (Excel)", ws_s.max_column)
+            col_i3.metric("Registros Carregados (DF)", len(df_info))
+            
+            st.write(f"- **Aba em análise:** `{sheet_sinale}`")
+            st.write(f"- **Linha de cabeçalho:** {header_sinale}")
+            
+            st.subheader("📋 Prévia dos Dados da Aba Selecionada")
+            st.dataframe(df_info.head(10), use_container_width=True)
+        except Exception as e:
+            st.error(f"Erro ao processar a planilha selecionada: {e}")
 
 elif menu_opcao == "ATUALIZAR DADOS":
     titulo_estilizado("Atualizar Dados do SINALE")
@@ -261,6 +273,7 @@ elif menu_opcao == "ATUALIZAR DADOS":
         ws_u = wb_upd[sheet_upd]
         
         st.write("---")
+        st.write(f"Aba selecionada: **{sheet_upd}**")
         st.write("Insira as correções ou ajustes necessários nos dados abaixo:")
         
         if st.button("🚀 Processar e Baixar Atualização"):
@@ -289,7 +302,7 @@ elif menu_opcao == "LIMPAR ARQUIVO":
             buffer = io.BytesIO()
             wb_clean.save(buffer)
             buffer.seek(0)
-            st.success("✅ Arquivo limpo com sucesso mantendo a estrutura!")
+            st.success(f"✅ Arquivo limpo com sucesso na aba **{sheet_clean}**, mantendo a estrutura!")
             st.download_button("📥 Baixar Arquivo Limpo", buffer.getvalue(), "sinale_limpo.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
@@ -302,9 +315,11 @@ elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
     if sinale_file_active:
         try:
             sinale_file_active.seek(0)
-            df_preview = pd.read_excel(sinale_file_active, header=header_active-1)
             wb_active = load_workbook(sinale_file_active)
             sheet_active = st.selectbox("Escolha a aba:", wb_active.sheetnames, key="sheet_sinale_active")
+            
+            sinale_file_active.seek(0)
+            df_preview = pd.read_excel(sinale_file_active, sheet_name=sheet_active, header=header_active-1)
             ws_a = wb_active[sheet_active]
             
             st.write("---")
@@ -313,8 +328,16 @@ elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
             
             if st.button("🚀 Filtrar Apenas Ativos e Baixar"):
                 linhas_para_remover = []
+                col_idx_excel = None
+                for c_idx in range(1, ws_a.max_column + 1):
+                    if ws_a.cell(row=header_active, column=c_idx).value == col_status:
+                        col_idx_excel = c_idx
+                        break
+                if not col_idx_excel:
+                    col_idx_excel = list(df_preview.columns).index(col_status) + 1
+
                 for r in range(header_active + 1, ws_a.max_row + 1):
-                    val_celula = ws_a.cell(row=r, column=list(df_preview.columns).index(col_status) + 1).value
+                    val_celula = ws_a.cell(row=r, column=col_idx_excel).value
                     if val_celula is None or str(val_ativo).strip().upper() not in str(val_celula).strip().upper():
                         linhas_para_remover.append(r)
                 
@@ -324,7 +347,7 @@ elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
                 buffer = io.BytesIO()
                 wb_active.save(buffer)
                 buffer.seek(0)
-                st.success("✅ Arquivo filtrado com sucesso mantendo apenas trabalhadores ativos!")
+                st.success(f"✅ Arquivo filtrado com sucesso na aba **{sheet_active}**, mantendo apenas trabalhadores ativos!")
                 st.download_button("📥 Baixar Arquivo de Trabalhadores Ativos", buffer.getvalue(), "sinale_trabalhadores_ativos.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         except Exception as e:
             st.error(f"Erro ao processar o arquivo: {e}")
