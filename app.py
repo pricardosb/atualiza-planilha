@@ -349,16 +349,19 @@ elif menu_opcao == "ATUALIZAR DADOS":
                     linhas_excel_alvo = [row["_excel_row"] for row in dados_tabela]
                     st.info(f"📊 Todos os **{len(linhas_excel_alvo)}** registros da planilha serão considerados.")
                 
-                # --- 2. DEFINIÇÃO DO CAMPO E VALOR (Exibido apenas quando há registros válidos selecionados) ---
-                if linhas_excel_alvo:
-                    st.write("---")
-                    st.subheader("2. Definir Campo e Novo Valor")
-                    col_alvo_upd = st.selectbox("Selecione o campo (coluna) que deseja atualizar:", lista_colunas, key="col_alvo_upd")
-                    novo_valor = st.text_input("Informe o novo valor para este campo:", key="novo_valor_input")
-                    
-                    st.write("---")
-                    
-                    if st.button("🚀 Processar Atualização", key="btn_proc_upd"):
+                st.write("---")
+                
+                # --- 2. DEFINIÇÃO DO CAMPO E VALOR (Sempre visível) ---
+                st.subheader("2. Definir Campo e Novo Valor")
+                col_alvo_upd = st.selectbox("Selecione o campo (coluna) que deseja atualizar:", lista_colunas, key="col_alvo_upd")
+                novo_valor = st.text_input("Informe o novo valor para este campo:", key="novo_valor_input")
+                
+                st.write("---")
+                
+                if st.button("🚀 Processar Atualização", key="btn_proc_upd"):
+                    if modo_atd_reg == "Selecionar registros específicos" and not linhas_excel_alvo:
+                        st.error("⚠️ Selecione ao menos um registro na lista acima antes de processar!")
+                    else:
                         col_idx_excel = cabecalhos.get(col_alvo_upd)
                         if not col_idx_excel:
                             st.error(f"Coluna '{col_alvo_upd}' não encontrada no arquivo.")
