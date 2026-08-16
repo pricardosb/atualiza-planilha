@@ -176,7 +176,7 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
             st.success("✅ Processamento concluído com sucesso!")
             st.download_button("📥 Baixar Versão Atualizada", st.session_state["wb_data"], "sinale_atualizado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS (COM A PRÉVIA QUE FUNCIONAVA) ---
+# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS ---
 elif menu_opcao == "ATUALIZAÇÕES GERAIS":
     titulo_estilizado("Atualizações Gerais")
     
@@ -263,10 +263,10 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                 {
                     "QTD REG": len(item["indices"]),
                     "ABA": item.get("aba", "Geral"),
-                    "VL BUSCA": item["vl_busca"],
-                    "CAMPO": item["coluna"],
-                    "VL ANTIGO": item["valor_antigo"],
-                    "NOVO VALOR": item["novo_valor"]
+                    "VL BUSCA": item.get("vl_busca", "Todos"),
+                    "CAMPO": item.get("coluna", ""),
+                    "VL ANTIGO": item.get("valor_antigo", "Vazio"),
+                    "NOVO VALOR": item.get("novo_valor", "")
                 }
                 for item in st.session_state['fila_modificacoes']
             ])
