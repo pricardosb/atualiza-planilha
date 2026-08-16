@@ -1,5 +1,4 @@
 import io
-import textwrap
 import pandas as pd
 import numpy as np
 import streamlit as st
@@ -46,31 +45,31 @@ def extrair_valor_limpo(df, idx, col_name):
         return None
 
 def titulo_estilizado(subtitulo=""):
-    html_content = f"""
-    <div style='text-align: center; padding: 1.8rem; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); border-radius: 12px; margin-bottom: 1.5rem; box-shadow: 0 6px 12px rgba(0,0,0,0.15);'>
-        <h1 style='color: white; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; font-weight: 800; font-size: 2.2rem; margin: 0; letter-spacing: 1.5px; text-transform: uppercase;'>
-            ⚡ SINALE WEB
-        </h1>
-        <p style='color: #e0e6ed; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; font-weight: 300; font-size: 1.15rem; margin-top: 6px; letter-spacing: 2px; text-transform: uppercase;'>
-            — Em Busca de Agilidade —
-        </p>
-    </div>
-    """
+    html_content = (
+        "<div style='text-align: center; padding: 1.8rem; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); border-radius: 12px; margin-bottom: 1.5rem; box-shadow: 0 6px 12px rgba(0,0,0,0.15);'>"
+        "<h1 style='color: white; font-family: \"Segoe UI\", Tahoma, Geneva, Verdana, sans-serif; font-weight: 800; font-size: 2.2rem; margin: 0; letter-spacing: 1.5px; text-transform: uppercase;'>"
+        "⚡ SINALE WEB"
+        "</h1>"
+        "<p style='color: #e0e6ed; font-family: \"Segoe UI\", Tahoma, Geneva, Verdana, sans-serif; font-weight: 300; font-size: 1.15rem; margin-top: 6px; letter-spacing: 2px; text-transform: uppercase;'>"
+        "— Em Busca de Agilidade —"
+        "</p>"
+        "</div>"
+    )
     if subtitulo:
-        html_content += f"""
-        <div style='margin-bottom: 1.5rem;'>
-            <h3 style='color: #2a5298; border-bottom: 2px solid #2a5298; padding-bottom: 5px; font-weight: 600;'>{subtitulo}</h3>
-        </div>
-        """
-    st.markdown(textwrap.dedent(html_content), unsafe_allow_html=True)
+        html_content += (
+            f"<div style='margin-bottom: 1.5rem;'>"
+            f"<h3 style='color: #2a5298; border-bottom: 2px solid #2a5298; padding-bottom: 5px; font-weight: 600;'>{subtitulo}</h3>"
+            f"</div>"
+        )
+    st.markdown(html_content, unsafe_allow_html=True)
 
 def aviso_sinale():
-    html_aviso = """
-    <div style='background-color: #f8f9fa; border-left: 4px solid #2a5298; padding: 12px 16px; border-radius: 6px; margin-bottom: 1.5rem; color: #333; font-family: "Segoe UI", sans-serif; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>
-        ⚠️ <b>Atenção:</b> É preciso ter acesso ao sistema <b>SINALE</b> para obter este arquivo.
-    </div>
-    """
-    st.markdown(textwrap.dedent(html_aviso), unsafe_allow_html=True)
+    html_aviso = (
+        "<div style='background-color: #f8f9fa; border-left: 4px solid #2a5298; padding: 12px 16px; border-radius: 6px; margin-bottom: 1.5rem; color: #333; font-family: \"Segoe UI\", sans-serif; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>"
+        "⚠️ <b>Atenção:</b> É preciso ter acesso ao sistema <b>SINALE</b> para obter este arquivo."
+        "</div>"
+    )
+    st.markdown(html_aviso, unsafe_allow_html=True)
 
 # --- MENU DE BARRA LATERAL ---
 st.sidebar.title("📌 Menu de Opções")
