@@ -1,4 +1,5 @@
 import io
+import textwrap
 import pandas as pd
 import numpy as np
 import streamlit as st
@@ -61,14 +62,15 @@ def titulo_estilizado(subtitulo=""):
             <h3 style='color: #2a5298; border-bottom: 2px solid #2a5298; padding-bottom: 5px; font-weight: 600;'>{subtitulo}</h3>
         </div>
         """
-    st.markdown(html_content, unsafe_allow_html=True)
+    st.markdown(textwrap.dedent(html_content), unsafe_allow_html=True)
 
 def aviso_sinale():
-    st.markdown("""
+    html_aviso = """
     <div style='background-color: #f8f9fa; border-left: 4px solid #2a5298; padding: 12px 16px; border-radius: 6px; margin-bottom: 1.5rem; color: #333; font-family: "Segoe UI", sans-serif; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>
         ⚠️ <b>Atenção:</b> É preciso ter acesso ao sistema <b>SINALE</b> para obter este arquivo.
     </div>
-    """, unsafe_allow_html=True)
+    """
+    st.markdown(textwrap.dedent(html_aviso), unsafe_allow_html=True)
 
 # --- MENU DE BARRA LATERAL ---
 st.sidebar.title("📌 Menu de Opções")
