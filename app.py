@@ -48,7 +48,7 @@ menu_opcao = st.sidebar.radio("Selecione a rotina:", [
     "SAIR DO SISTEMA"
 ])
 
-# --- OPÇÃO 1: INCLUSÃO DE TRABALHO (ORIGINAL) ---
+# --- OPÇÃO 1: INCLUSÃO DE TRABALHO (ORIGINAL PRESERVADA) ---
 if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
     titulo_estilizado("Rotina: Inclusão de Trabalho")
     col1, col2 = st.columns(2)
@@ -115,7 +115,7 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
             buffer = io.BytesIO(); wb.save(buffer)
             st.success("Processado!"); st.download_button("📥 Baixar", buffer.getvalue(), "sinale_atualizado.xlsx")
 
-# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS (REFEITA) ---
+# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS (COM BUSCA AUTOMÁTICA) ---
 elif menu_opcao == "ATUALIZAÇÕES GERAIS":
     titulo_estilizado("Atualizações Gerais")
     sinale_file = st.file_uploader("Selecione o arquivo do SINALE (.xlsx)", type=["xlsx"])
@@ -126,18 +126,25 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         ws = wb[wb.sheetnames[0]]
         df = pd.read_excel(sinale_file, header=header-1)
         
-        # 1. VISUALIZAÇÃO E PESQUISA
+        # 1. VISUALIZAÇÃO E PESQUISA INTELIGENTE
         st.subheader("🔍 Filtros de Visualização")
         cols_para_ver = st.multiselect("Quais campos deseja visualizar?", df.columns.tolist(), default=df.columns.tolist())
         
+        # Filtro com valores existentes na coluna
         col_filtro, val_filtro = st.columns(2)
-        with col_filtro: filtro_col = st.selectbox("Coluna para buscar:", df.columns)
-        with val_filtro: filtro_val = st.text_input("Pesquisar valor:")
+        with col_filtro: 
+            filtro_col = st.selectbox("Coluna para buscar:", df.columns)
         
-        # Filtra o DF
+        # Puxa valores únicos da coluna escolhida
+        valores_existentes = sorted([str(v) for v in df[filtro_col].dropna().unique()])
+        
+        with val_filtro: 
+            filtro_vals = st.multiselect("Selecione o(s) valor(es) para filtrar:", valores_existentes)
+        
+        # Filtra o DF baseado na seleção
         df_view = df.copy()
-        if filtro_val:
-            df_view = df_view[df_view[filtro_col].astype(str).str.contains(filtro_val, case=False, na=False)]
+        if filtro_vals:
+            df_view = df_view[df_view[filtro_col].astype(str).isin(filtro_vals)]
         
         st.dataframe(df_view[cols_para_ver], use_container_width=True)
         
@@ -145,24 +152,20 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         st.subheader("✏️ Seleção para Atualizar")
         st.info("Marque as linhas que deseja atualizar abaixo:")
         
-        # Prepara a tabela com checkbox
         df_for_edit = df_view.copy()
         df_for_edit.insert(0, "Atualizar?", False)
         
-        # Editavel
         df_editado = st.data_editor(df_for_edit, column_config={"Atualizar?": st.column_config.CheckboxColumn()}, use_container_width=True)
         
         # 3. ATUALIZAÇÃO
         selecionados = df_editado[df_editado["Atualizar?"] == True]
         if not selecionados.empty:
-            st.write(f"Linhas selecionadas: {len(selecionados)}")
+            st.write(f"Total de linhas selecionadas: {len(selecionados)}")
             col_target = st.selectbox("Selecione a coluna que deseja alterar:", df.columns)
             novo_val = st.text_input("Digite o novo valor:")
             
             if st.button("🚀 Aplicar Atualização"):
-                # Mapeia as linhas de volta para o Excel (usando o índice do DF original)
                 for idx in selecionados.index:
-                    # +2 porque linha 11 header = linha 12 dados (+1 do index 0)
                     ws.cell(row=idx + header + 1, column=df.columns.get_loc(col_target) + 1, value=novo_val)
                 
                 buffer = io.BytesIO()
@@ -171,8 +174,8 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
 
 # --- OUTRAS OPÇÕES ---
 elif menu_opcao == "LIMPAR ARQUIVO":
-    st.write("Função de limpeza ativa.")
+    st.write("Funcionalidade de Limpeza...")
 elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
-    st.write("Função de filtro ativa.")
+    st.write("Funcionalidade de Filtro de Ativos...")
 elif menu_opcao == "SAIR DO SISTEMA":
     st.stop()
