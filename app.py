@@ -326,7 +326,7 @@ elif menu_opcao == "ATUALIZAR DADOS":
                         row_data["_excel_row"] = r
                         dados_tabela.append(row_data)
                 
-                # --- 1. SELEÇÃO DE REGISTROS ---
+                # --- 1. SELEÇÃO DE REGISTROS (PRÉ-SELECIONADOS POR PADRÃO) ---
                 st.subheader("1. Seleção dos Registros a Atualizar")
                 modo_atd_reg = st.radio("Como deseja selecionar os registros?", ["Selecionar registros específicos", "Atualizar todos os registros da planilha"], key="modo_atd_reg")
                 
@@ -335,7 +335,9 @@ elif menu_opcao == "ATUALIZAR DADOS":
                     col_busca_upd = st.selectbox("Coluna identificadora para busca:", lista_colunas, key="col_busca_upd")
                     
                     opcoes_selecao_upd = [f"{row[col_busca_upd]} (Linha Excel {row['_excel_row']})" for row in dados_tabela if row.get(col_busca_upd) is not None]
-                    selected_options_upd = st.multiselect("🔍 Escolha os registros:", opcoes_selecao_upd, key="sel_opts_upd")
+                    
+                    # Todos os registros vêm pré-selecionados por padrão (default=opcoes_selecao_upd)
+                    selected_options_upd = st.multiselect("🔍 Escolha os registros:", opcoes_selecao_upd, default=opcoes_selecao_upd, key="sel_opts_upd")
                     
                     for item in selected_options_upd:
                         try:
@@ -351,7 +353,7 @@ elif menu_opcao == "ATUALIZAR DADOS":
                 
                 st.write("---")
                 
-                # --- 2. DEFINIÇÃO DO CAMPO E VALOR (Sempre visível) ---
+                # --- 2. DEFINIÇÃO DO CAMPO E VALOR (Sempre visível para dar seguimento direto) ---
                 st.subheader("2. Definir Campo e Novo Valor")
                 col_alvo_upd = st.selectbox("Selecione o campo (coluna) que deseja atualizar:", lista_colunas, key="col_alvo_upd")
                 novo_valor = st.text_input("Informe o novo valor para este campo:", key="novo_valor_input")
