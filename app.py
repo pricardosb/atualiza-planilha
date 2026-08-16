@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 from openpyxl import load_workbook
-from openpyxl.styles import PatternFill
+from openpyxl.styles import Font
 from copy import copy
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
@@ -147,6 +147,13 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
     header = st.number_input("Linha do cabeçalho:", value=11, min_value=1)
     
     if sinale_file:
+        # Inicializa a fila na session_state se não existir ou se trocar de arquivo
+        if 'fila_modificacoes' not in st.session_state:
+            st.session_state['fila_modificacoes'] = []
+        if 'last_sinale_name' not in st.session_state or st.session_state['last_sinale_name'] != sinale_file.name:
+            st.session_state['fila_modificacoes'] = []
+            st.session_state['last_sinale_name'] = sinale_file.name
+
         wb = load_workbook(sinale_file)
         ws = wb[wb.sheetnames[0]]
         df = pd.read_excel(sinale_file, header=header-1)
@@ -165,7 +172,6 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
             df_view = df_view[df_view[filtro_col].astype(str).isin(filtro_vals)]
         
         st.metric("Total de Registros Encontrados", len(df_view))
-        
         st.dataframe(df_view[cols_para_ver], use_container_width=True)
         
         # 2. SELEÇÃO PARA ATUALIZAÇÃO
@@ -175,16 +181,16 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         
         cols_btns = st.columns([1, 1, 4])
         with cols_btns[0]:
-            if st.button("✅ Marcar Todos"): st.session_state['select_all'] = True
+            if st.button("✅ Marcar Todos"): st.session_state['select_all'] = True; st.rerun()
         with cols_btns[1]:
-            if st.button("❌ Desmarcar Todos"): st.session_state['select_all'] = False
+            if st.button("❌ Desmarcar Todos"): st.session_state['select_all'] = False; st.rerun()
             
         df_for_edit = df_view.copy()
         df_for_edit.insert(0, "Atualizar?", st.session_state['select_all'])
         
         df_editado = st.data_editor(df_for_edit, column_config={"Atualizar?": st.column_config.CheckboxColumn()}, use_container_width=True)
         
-        # 3. CONTAGEM, VALOR ATUAL E ATUALIZAÇÃO COM REGRAS DE NEGÓCIO
+        # 3. CONTAGEM, VALOR ATUAL E ADIÇÃO À FILA
         selecionados = df_editado[df_editado["Atualizar?"] == True]
         st.metric("Total de Registros Marcados", len(selecionados))
         
@@ -201,45 +207,81 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
             
             novo_val = st.text_input("Digite o novo valor:")
             
-            if st.button("🚀 Aplicar Atualização"):
-                valor_convertido = converter_valor_inteligente(novo_val, df[col_target].dtype)
-                
-                # Identificação de colunas para as regras especiais
-                is_rz = col_target.strip().upper() in ['RZ', 'R.Z.']
-                rem_col_idx = None
-                for idx_c, c_name in enumerate(df.columns):
-                    if str(c_name).strip().upper() == 'REM':
-                        rem_col_idx = idx_c + 1
-                        break
+            if st.button("➕ Adicionar à Fila de Modificações"):
+                st.session_state['fila_modificacoes'].append({
+                    "indices": selecionados.index.tolist(),
+                    "coluna": col_target,
+                    "novo_valor": novo_val
+                })
+                st.success("Modificação adicionada à fila com sucesso! Você pode continuar fazendo novas modificações.")
+                st.rerun()
+
+        # 4. EXIBIÇÃO DA FILA E PROCESSAMENTO FINAL
+        if st.session_state['fila_modificacoes']:
+            st.markdown("---")
+            st.subheader("📋 Fila de Modificações Pendentes")
+            
+            df_fila_resumo = pd.DataFrame([
+                {"Qtd Registros": len(item["indices"]), "Coluna": item["coluna"], "Novo Valor": item["novo_valor"]}
+                for item in st.session_state['fila_modificacoes']
+            ])
+            st.dataframe(df_fila_resumo, use_container_width=True)
+            
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                if st.button("🗑️ Limpar Fila de Modificações"):
+                    st.session_state['fila_modificacoes'] = []
+                    st.rerun()
+            with col_f2:
+                if st.button("🚀 Processar Todas e Baixar Arquivo Final"):
+                    red_font = Font(color="FF0000")
+                    
+                    # Identificação da coluna REM para a regra de negócio
+                    rem_col_idx = None
+                    for idx_c, c_name in enumerate(df.columns):
+                        if str(c_name).strip().upper() == 'REM':
+                            rem_col_idx = idx_c + 1
+                            break
+                    
+                    for mod in st.session_state['fila_modificacoes']:
+                        col_target = mod["coluna"]
+                        novo_val = mod["novo_valor"]
+                        valor_convertido = converter_valor_inteligente(novo_val, df[col_target].dtype)
                         
-                is_saida = col_target.strip().upper() in ['SAIDA', 'SAÍDA']
-                red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-                
-                for idx in selecionados.index:
-                    excel_row = idx + header + 1
-                    col_alvo_idx = df.columns.get_loc(col_target) + 1
-                    
-                    # Atualiza o campo principal
-                    ws.cell(row=excel_row, column=col_alvo_idx, value=valor_convertido)
-                    
-                    # REGRA 2: Se RZ >= 3, atualiza REM com divisão inteira por 3
-                    if is_rz and rem_col_idx is not None:
-                        try:
-                            num_rz = float(str(valor_convertido).replace(',', '.'))
-                            if num_rz >= 3:
-                                rem_val = int(num_rz // 3)
-                                ws.cell(row=excel_row, column=rem_col_idx, value=rem_val)
-                        except:
-                            pass
+                        is_rz = col_target.strip().upper() in ['RZ', 'R.Z.']
+                        is_saida = col_target.strip().upper() in ['SAIDA', 'SAÍDA']
+                        
+                        for idx in mod["indices"]:
+                            excel_row = idx + header + 1
+                            col_alvo_idx = df.columns.get_loc(col_target) + 1
                             
-                    # REGRA 1: Se o campo alterado for SAÍDA, pinta a linha inteira de vermelho
-                    if is_saida:
-                        for c_idx in range(1, ws.max_column + 1):
-                            ws.cell(row=excel_row, column=c_idx).fill = red_fill
-                
-                buffer = io.BytesIO()
-                wb.save(buffer)
-                st.download_button("📥 Baixar Arquivo Atualizado", buffer.getvalue(), "sinale_atualizado.xlsx")
+                            # Atualiza o campo principal
+                            ws.cell(row=excel_row, column=col_alvo_idx, value=valor_convertido)
+                            
+                            # REGRA 2: Se RZ >= 3, atualiza REM com divisão inteira por 3
+                            if is_rz and rem_col_idx is not None:
+                                try:
+                                    num_rz = float(str(valor_convertido).replace(',', '.'))
+                                    if num_rz >= 3:
+                                        rem_val = int(num_rz // 3)
+                                        ws.cell(row=excel_row, column=rem_col_idx, value=rem_val)
+                                except:
+                                    pass
+                                    
+                            # REGRA 1: Se o campo alterado for SAÍDA, deixa os caracteres da linha inteira em vermelho
+                            if is_saida:
+                                for c_idx in range(1, ws.max_column + 1):
+                                    cell_obj = ws.cell(row=excel_row, column=c_idx)
+                                    cur_font = cell_obj.font
+                                    if cur_font:
+                                        cell_obj.font = Font(name=cur_font.name, size=cur_font.size, bold=cur_font.bold, italic=cur_font.italic, color="FF0000")
+                                    else:
+                                        cell_obj.font = red_font
+                    
+                    buffer = io.BytesIO()
+                    wb.save(buffer)
+                    st.success("Todas as modificações foram processadas com sucesso!")
+                    st.download_button("📥 Baixar Arquivo Atualizado Final", buffer.getvalue(), "sinale_atualizado_final.xlsx")
 
 # --- OUTRAS OPÇÕES ---
 elif menu_opcao == "LIMPAR ARQUIVO":
