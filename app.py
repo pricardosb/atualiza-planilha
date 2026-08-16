@@ -43,7 +43,7 @@ def extrair_valor_limpo(df, idx, col_name):
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Integrador Profissional", layout="wide")
-st.title("⚡ INTEGRADOR ==> Dados Gerais dos Internos >>> SINALE")
+st.title("⚡ INTEGRADOR ==> DADOS GERAIS DO INTERNO >>> SINALE")
 
 # --- CARREGAMENTO ---
 col1, col2 = st.columns(2)
@@ -52,7 +52,7 @@ with col1:
     origem_tem_cabecalho = st.checkbox("Origem tem cabeçalho na 1ª linha?", value=True)
 with col2:
     dest_file = st.file_uploader("2. Arquivo de DESTINO (.xlsx)", type=["xlsx"])
-    header_dest = st.number_input("Linha do cabeçalho no Destino:", value=11, min_value=1)
+    header_dest = st.number_input("Linha do cabeçalho no Arquivo de Destino:", value=11, min_value=1)
 
 if source_file:
     cache_key_src = f"{source_file.name}_{origem_tem_cabecalho}"
