@@ -90,7 +90,7 @@ wb_data = st.session_state.get("wb_data")
 if df_origem is not None and wb_data is not None:
     wb = load_workbook(io.BytesIO(wb_data))
     
-    # Descrição atualizada
+    # Descrição exata solicitada
     target_sheet = st.selectbox("Escolha a ABA na Planilha de Destino a ser Atualizada:", wb.sheetnames)
     ws = wb[target_sheet]
 
@@ -100,6 +100,10 @@ if df_origem is not None and wb_data is not None:
     opcoes_selecao = [f"{val} (Linha {idx})" for idx, val in df_origem[col_busca].items()]
     selected_options = st.multiselect("🔍 Escolha os registros:", opcoes_selecao)
     selected_indices = [int(item.split("(Linha ")[1].replace(")", "")) for item in selected_options]
+
+    # Exibição da quantidade de registros selecionados
+    if selected_indices:
+        st.info(f"📊 **{len(selected_indices)}** registro(s) selecionado(s) para atualização.")
 
     mapping = {}
     st.write("---")
@@ -121,23 +125,22 @@ if df_origem is not None and wb_data is not None:
     if st.button("🚀 Processar e Atualizar"):
         if not selected_indices: st.error("Selecione itens!"); st.stop()
         
-        # 1. Preparação: Ler último valor da sequência
+        # 1. Obter valor base de sequência da linha anterior
         ref_row_idx = (target_row - 1) if modo_insercao == "A partir de uma linha específica" else (ws.max_row)
         
         base_seq = 0
         if ref_row_idx >= header_dest:
-            # Tenta pegar valor da primeira coluna como base
             val_acima = ws.cell(row=ref_row_idx, column=1).value
             try:
                 base_seq = int(val_acima)
             except:
                 base_seq = 0
         
-        # 2. Inserção
+        # 2. Inserir linhas caso seja no meio
         if modo_insercao == "A partir de uma linha específica":
             ws.insert_rows(target_row, amount=len(selected_indices))
         
-        # 3. Gravação
+        # 3. Escrever dados e numeração
         current_row = target_row
         seq_val = base_seq
 
@@ -147,20 +150,21 @@ if df_origem is not None and wb_data is not None:
                 target_cell = ws.cell(row=current_row, column=col_idx)
                 ref_cell = ws.cell(row=ref_row_idx, column=col_idx)
                 
+                # Copia formatação integral da célula de referência
                 copiar_estilo_completo(ref_cell, target_cell)
                 
-                if col_idx in mapping:
+                # Gravação robusta
+                if col_idx == 1 or mapping.get(col_idx) == "⚠️ Auto-incrementar (Seq)":
+                    target_cell.value = seq_val
+                elif col_idx in mapping:
                     origem_col = mapping[col_idx]
-                    if origem_col == "⚠️ Auto-incrementar (Seq)":
-                        target_cell.value = seq_val
-                    else:
-                        target_cell.value = extrair_valor_limpo(df_origem, idx, origem_col)
+                    target_cell.value = extrair_valor_limpo(df_origem, idx, origem_col)
                 else:
                     target_cell.value = None # Limpa colunas não mapeadas
             
             current_row += 1
 
-        # 4. Re-sequenciamento
+        # 4. Re-sequenciar linhas abaixo (caso inserido no meio)
         if modo_insercao == "A partir de uma linha específica":
             for r in range(current_row, ws.max_row + 1):
                 val_atual = ws.cell(row=r, column=1).value
