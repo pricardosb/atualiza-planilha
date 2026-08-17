@@ -177,7 +177,7 @@ menu_opcao = st.sidebar.radio("Selecione a rotina:", [
     "SAIR DO SISTEMA"
 ])
 
-# --- OPÇÃO 1: INCLUSÃO DE TRABALHO (MANTIDA INTACTA) ---
+# --- OPÇÃO 1: INCLUSÃO DE TRABALHO ---
 if menu_opcao == "INCLUSÃO DE TRABALHO":
     titulo_estilizado("INTEGRADOR ==> DADOS GERAIS DO INTERNO >>> SINALE")
     col1, col2 = st.columns(2)
@@ -272,19 +272,17 @@ if menu_opcao == "INCLUSÃO DE TRABALHO":
             st.success("✅ Processamento concluído com sucesso!")
             st.download_button("📥 Baixar Versão Atualizada", st.session_state["wb_data"], "sinale_atualizado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS (MANTIDA INTACTA) ---
+# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS ---
 elif menu_opcao == "ATUALIZAÇÕES GERAIS":
     titulo_estilizado("Atualizações Gerais")
     
     if st.session_state.get("wb_data") is not None:
         st.info("📁 Arquivo carregado automaticamente da memória.")
-        
         if st.checkbox("🗑️ Descartar dados da memória e carregar novo arquivo", value=False, key="desc_op2"):
             st.session_state["wb_data"] = None
             st.session_state['fila_modificacoes'] = []
             st.success("Memória limpa com sucesso!")
             st.rerun()
-            
     else:
         st.warning("⚠️ Nenhum arquivo de destino encontrado na memória. Faça o upload abaixo.")
         sinale_file = st.file_uploader("Selecione o arquivo do SINALE (.xlsx)", type=["xlsx"], key="upload_op2")
@@ -296,14 +294,11 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
     if st.session_state.get("wb_data") is not None:
         wb_temp = load_workbook(io.BytesIO(st.session_state["wb_data"]), data_only=True)
         target_sheet = st.selectbox("Escolha a ABA do arquivo para trabalhar:", wb_temp.sheetnames, key="aba_op2")
-        
         header = st.number_input("Linha do cabeçalho:", value=11, min_value=1, key="header_op2")
-        
         df = pd.read_excel(io.BytesIO(st.session_state["wb_data"]), sheet_name=target_sheet, header=header-1)
 
         st.subheader("🔍 Filtros de Visualização")
         cols_para_ver = st.multiselect("Quais campos deseja visualizar?", df.columns.tolist(), default=df.columns.tolist())
-        
         col_filtro, val_filtro = st.columns(2)
         with col_filtro: filtro_col = st.selectbox("Coluna para buscar:", df.columns, key="filtro_col_op2")
         valores_existentes = sorted([str(v) for v in df[filtro_col].dropna().unique()])
@@ -311,7 +306,6 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         
         df_view = df.copy()
         if filtro_vals: df_view = df_view[df_view[filtro_col].astype(str).isin(filtro_vals)]
-        
         st.metric("Total de Registros Encontrados", len(df_view))
         st.dataframe(df_view[cols_para_ver], use_container_width=True)
         
@@ -322,7 +316,7 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
             if st.button("✅ Marcar Todos", key="btn_marcar_t"): st.session_state['select_all'] = True; st.rerun()
         with cols_btns[1]:
             if st.button("❌ Desmarcar Todos", key="btn_desmarcar_t"): st.session_state['select_all'] = False; st.rerun()
-            
+        
         df_for_edit = df_view.copy()
         df_for_edit.insert(0, "Atualizar?", st.session_state['select_all'])
         df_editado = st.data_editor(df_for_edit, column_config={"Atualizar?": st.column_config.CheckboxColumn()}, use_container_width=True, key="editor_op2")
@@ -332,103 +326,34 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         
         if not selecionados.empty:
             col_target = st.selectbox("Selecione a coluna que deseja alterar:", df.columns, key="col_target_op2")
-            
             if col_target.strip().upper() == "DIAS":
                 st.markdown("---")
                 st.subheader("📅 Cálculo Automático de Dias Úteis (Seg a Sáb / Seg a Sex)")
                 c_mes, c_ano = st.columns(2)
-                meses_dict = {
-                    "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4,
-                    "Maio": 5, "Junho": 6, "Julho": 7, "Agosto": 8,
-                    "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
-                }
-                with c_mes:
-                    mes_escolhido_nome = st.selectbox("Selecione o Mês:", list(meses_dict.keys()), key="sel_mes_dias")
-                    mes_num = meses_dict[mes_escolhido_nome]
-                with c_ano:
-                    ano_escolhido = st.number_input("Digite o Ano:", min_value=2020, max_value=2035, value=datetime.date.today().year, key="sel_ano_dias")
-                
+                meses_dict = {"Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6, "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12}
+                with c_mes: mes_escolhido_nome = st.selectbox("Selecione o Mês:", list(meses_dict.keys()), key="sel_mes_dias"); mes_num = meses_dict[mes_escolhido_nome]
+                with c_ano: ano_escolhido = st.number_input("Digite o Ano:", min_value=2020, max_value=2035, value=datetime.date.today().year, key="sel_ano_dias")
                 stats = obter_estatisticas_mes(ano_escolhido, mes_num)
-                
-                st.info(f"""
-                **Resumo para {mes_escolhido_nome}/{ano_escolhido}:**
-                * **Segunda a Sábado:** {stats['seg_sab_total']} brutos | **Feriados (Seg-Sáb):** {stats['seg_sab_feriados']} | **Úteis (Seg a Sábado):** **{stats['seg_sab_uteis']}**
-                * **Segunda a Sexta:** {stats['seg_sex_total']} brutos | **Feriados (Seg-Sex):** {stats['seg_sex_feriados']} | **Úteis (Seg a Sexta):** **{stats['seg_sex_uteis']}**
-                """)
-                
-                if stats['feriados_detalhes']:
-                    feriados_str = ", ".join([f"{f[0].strftime('%d/%m/%Y')}" for f in stats['feriados_detalhes']])
-                    st.write(f"📌 **Feriados no período (Seg a Sábado):** {feriados_str}")
-                else:
-                    st.write("📌 **Nenhum feriado nacional** de Segunda a Sábado neste mês/ano.")
-                st.markdown("---")
+                st.info(f"**Resumo para {mes_escolhido_nome}/{ano_escolhido}:**\n* **Segunda a Sábado:** {stats['seg_sab_total']} brutos | **Úteis:** **{stats['seg_sab_uteis']}**\n* **Segunda a Sexta:** {stats['seg_sex_total']} brutos | **Úteis:** **{stats['seg_sex_uteis']}**")
             
             valores_antigos_str = ", ".join([str(v) for v in selecionados[col_target].dropna().unique()])
-            if not valores_antigos_str:
-                valores_antigos_str = "Vazio"
-            st.info(f"📌 **Valor(es) atual(is) / antigo(s)** no campo **'{col_target}'** para os registros selecionados: **{valores_antigos_str}**")
-            
+            st.info(f"📌 **Valor(es) atual(is) / antigo(s)** no campo **'{col_target}'**: **{valores_antigos_str if valores_antigos_str else 'Vazio'}**")
             novo_val = st.text_input("Digite o novo valor:", key="novo_val_op2")
             
             if st.button("➕ Adicionar à Fila de Modificações", key="btn_add_fila"):
-                vl_busca_str = ", ".join(filtro_vals) if filtro_vals else "Todos"
-                st.session_state['fila_modificacoes'].append({
-                    "indices": selecionados.index.tolist(),
-                    "coluna": col_target,
-                    "novo_valor": novo_val,
-                    "valor_antigo": valores_antigos_str,
-                    "vl_busca": vl_busca_str,
-                    "aba": target_sheet
-                })
+                st.session_state['fila_modificacoes'].append({"indices": selecionados.index.tolist(), "coluna": col_target, "novo_valor": novo_val, "valor_antigo": valores_antigos_str, "vl_busca": ", ".join(filtro_vals) if filtro_vals else "Todos", "aba": target_sheet})
                 st.success("Modificação adicionada à fila!"); st.rerun()
 
         if st.session_state['fila_modificacoes']:
             st.markdown("---")
             st.subheader("📋 Fila de Modificações Pendentes")
-            
-            dados_fila = []
-            for idx, item in enumerate(st.session_state['fila_modificacoes']):
-                dados_fila.append({
-                    "Remover?": False,
-                    "ID_ITEM": idx,
-                    "QTD REG": len(item["indices"]),
-                    "ABA": item.get("aba", "Geral"),
-                    "VL BUSCA": item.get("vl_busca", "Todos"),
-                    "CAMPO": item.get("coluna", ""),
-                    "VL ANTIGO": item.get("valor_antigo", "Vazio"),
-                    "NOVO VALOR": item.get("novo_valor", "")
-                })
-            
-            df_fila_resumo = pd.DataFrame(dados_fila)
-            
-            df_fila_editado = st.data_editor(
-                df_fila_resumo,
-                column_config={
-                    "Remover?": st.column_config.CheckboxColumn("Remover?"),
-                    "ID_ITEM": None
-                },
-                disabled=["QTD REG", "ABA", "VL BUSCA", "CAMPO", "VL ANTIGO", "NOVO VALOR"],
-                use_container_width=True,
-                key="editor_fila"
-            )
-            
+            df_fila_resumo = pd.DataFrame([{"Remover?": False, "ID_ITEM": i, "ABA": item.get("aba", "Geral"), "CAMPO": item.get("coluna", ""), "NOVO VALOR": item.get("novo_valor", "")} for i, item in enumerate(st.session_state['fila_modificacoes'])])
+            df_fila_editado = st.data_editor(df_fila_resumo, column_config={"Remover?": st.column_config.CheckboxColumn("Remover?"), "ID_ITEM": None}, disabled=["ABA", "CAMPO", "NOVO VALOR"], use_container_width=True, key="editor_fila")
             col_f1, col_f2, col_f3 = st.columns(3)
             with col_f1:
-                if st.button("🗑️ Remover Selecionados", key="btn_remover_sel"):
-                    indices_para_remover = df_fila_editado[df_fila_editado["Remover?"] == True]["ID_ITEM"].tolist()
-                    if indices_para_remover:
-                        st.session_state['fila_modificacoes'] = [
-                            item for i, item in enumerate(st.session_state['fila_modificacoes']) 
-                            if i not in indices_para_remover
-                        ]
-                        st.success("Modificação(ões) selecionada(s) removida(s) da fila!")
-                        st.rerun()
-                    else:
-                        st.warning("Marque ao menos um item na coluna 'Remover?' para excluir.")
-            with col_f2:
-                if st.button("🗑️ Limpar Fila Inteira", key="btn_limpar_fila"):
-                    st.session_state['fila_modificacoes'] = []
-                    st.success("Fila limpa com sucesso!")
+                if st.button("🗑️ Remover Selecionados"):
+                    indices = df_fila_editado[df_fila_editado["Remover?"] == True]["ID_ITEM"].tolist()
+                    st.session_state['fila_modificacoes'] = [item for i, item in enumerate(st.session_state['fila_modificacoes']) if i not in indices]
                     st.rerun()
             with col_f3:
                 file_bytes = gerar_arquivo_atualizado_bytes(io.BytesIO(st.session_state["wb_data"]), header, st.session_state['fila_modificacoes'], df, sheet_name=target_sheet)
@@ -439,7 +364,8 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     titulo_estilizado("Pesquisa para Remição")
     
     st.subheader("1. Configuração de Arquivos, Abas e Campos")
-    uploaded_files = st.file_uploader("Selecione um ou mais arquivos (.xlsx)", type=["xlsx"], accept_multiple_files=True, key="search_upload")
+    # ADICIONADO .ods
+    uploaded_files = st.file_uploader("Selecione um ou mais arquivos (.xlsx, .xls, .ods)", type=["xlsx", "xls", "ods"], accept_multiple_files=True, key="search_upload")
     
     if uploaded_files:
         settings = {}
@@ -485,7 +411,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         df_tmp = pd.read_excel(f, sheet_name=sheet, header=cfg["header_idx"])
                         target_col = cfg["col_busca"]
                         if target_col and target_col in df_tmp.columns:
-                            # Unificando as informações
                             df_tmp['Origem (Arquivo/Aba)'] = f"{f.name} / {sheet}"
                             df_tmp['Campo Pesquisado'] = target_col
                             all_results.append(df_tmp)
@@ -498,47 +423,31 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             else:
                 st.warning("Nenhum dado encontrado com as configurações informadas.")
                 st.session_state['pesquisa_df'] = None
-
     else:
         st.session_state['pesquisa_df'] = None
 
     if st.session_state.get('pesquisa_df') is not None:
         df_pesq = st.session_state['pesquisa_df']
-        
         st.markdown("---")
         st.subheader("🔍 Filtros de Visualização e Busca")
         
-        # Colunas de identificação unificadas
         cols_controle = ['Origem (Arquivo/Aba)', 'Campo Pesquisado']
         outras_cols = [c for c in df_pesq.columns if c not in cols_controle]
         lista_colunas_full = cols_controle + outras_cols
         
-        cols_para_ver = st.multiselect(
-            "Selecione os campos que deseja visualizar:", 
-            options=lista_colunas_full, 
-            default=cols_controle, # Já seleciona a origem e o campo por padrão
-            key="cols_ver_op3"
-        )
+        cols_para_ver = st.multiselect("Selecione os campos que deseja visualizar:", options=lista_colunas_full, default=cols_controle, key="cols_ver_op3")
         
         col_filtro, val_filtro = st.columns(2)
-        with col_filtro:
-            filtro_col = st.selectbox("Coluna para buscar:", df_pesq.columns, key="filtro_col_op3")
-        
+        with col_filtro: filtro_col = st.selectbox("Coluna para buscar:", df_pesq.columns, key="filtro_col_op3")
         valores_existentes = sorted([str(v) for v in df_pesq[filtro_col].dropna().unique()])
-        with val_filtro:
-            filtro_vals = st.multiselect("Selecione o(s) valor(es) para filtrar:", valores_existentes, key="filtro_vals_op3")
+        with val_filtro: filtro_vals = st.multiselect("Selecione o(s) valor(es) para filtrar:", valores_existentes, key="filtro_vals_op3")
         
         df_view = df_pesq.copy()
-        if filtro_vals:
-            df_view = df_view[df_view[filtro_col].astype(str).isin(filtro_vals)]
-        
+        if filtro_vals: df_view = df_view[df_view[filtro_col].astype(str).isin(filtro_vals)]
         st.metric("Total de Registros Encontrados", len(df_view))
-        
-        if cols_para_ver:
-            st.dataframe(df_view[cols_para_ver], use_container_width=True)
-        else:
-            st.info("ℹ️ Selecione ao menos um campo acima para exibir a tabela de visualização.")
-            
+        if cols_para_ver: st.dataframe(df_view[cols_para_ver], use_container_width=True)
+        else: st.info("ℹ️ Selecione ao menos um campo acima para exibir a tabela de visualização.")
+
 # --- DEMAIS OPÇÕES ---
 elif menu_opcao == "LIMPAR ARQUIVO":
     if st.button("🗑️ Limpar Tudo"): st.session_state.clear(); st.rerun()
