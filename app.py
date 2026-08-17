@@ -481,6 +481,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         target_col = cfg["col_busca"]
                         if target_col and target_col in df_tmp.columns:
                             df_tmp['MÊS/ANO - ABA'] = f"{mes_ano_m9} - {sheet}"
+                            df_tmp['Aba Original'] = sheet  # Mantém o controle exato da aba para filtragem de colunas
                             df_tmp['Campo Pesquisado'] = target_col
                             df_tmp['Valor_Busca'] = df_tmp[target_col].astype(str)
                             df_tmp['Nome (Visualização)'] = df_tmp[target_col].astype(str) + f" - {sheet}"
@@ -516,12 +517,24 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             
         st.metric("Total de Registros Encontrados", len(df_view))
         
-        # 2. SEGUNDO: Disponibilizar os campos da aba do nome selecionado para visualização
+        # 2. SEGUNDO: Disponibilizar estritamente os campos da aba correspondente (Com/Sem Rendimentos)
         if not df_view.empty:
-            cols_controle = ['MÊS/ANO - ABA', 'Nome (Visualização)', 'Campo Pesquisado']
-            outras_cols = [c for c in df_view.columns if c not in cols_controle and c != 'Valor_Busca']
-            lista_colunas_full = cols_controle + outras_cols
+            abas_presentes = df_view['Aba Original'].unique()
             
+            # Se múltiplos nomes de abas diferentes foram selecionados simultaneamente, unimos as colunas estritas de cada aba correspondente
+            colunas_disponiveis_aba = []
+            cols_controle = ['MÊS/ANO - ABA', 'Nome (Visualização)', 'Campo Pesquisado']
+            
+            for aba in abas_presentes:
+                df_aba_temp = df_view[df_view['Aba Original'] == aba]
+                outras_cols = [c for c in df_aba_temp.columns if c not in cols_controle and c != 'Valor_Busca' and c != 'Aba Original']
+                for c in outras_cols:
+                    if c not in colunas_disponiveis_aba:
+                        colunas_disponiveis_aba.append(c)
+            
+            lista_colunas_full = cols_controle + colunas_disponiveis_aba
+            
+            st.info(f"💡 Aba(s) identificada(s) para os registros selecionados: **{', '.join(abas_presentes)}**. Os campos abaixo foram filtrados especificamente para esta(s) aba(s).")
             cols_para_ver = st.multiselect("Selecione os campos da(s) aba(s) correspondente(s) para visualizar:", options=lista_colunas_full, default=cols_controle, key="cols_ver_op3")
             
             if cols_para_ver: 
