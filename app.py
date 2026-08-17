@@ -65,6 +65,25 @@ def gerar_arquivo_atualizado_bytes(source_input, header, fila, df_original, shee
         for idx in mod["indices"]:
             excel_row = idx + header + 1
             ws.cell(row=excel_row, column=df_original.columns.get_loc(col_target) + 1, value=valor_convertido)
+            
+            # Se o campo atualizado for SAIDA (ou SAÍDA), pinta toda a linha de vermelho
+            if col_target.strip().upper() in ["SAIDA", "SAÍDA"]:
+                for col_idx in range(1, ws.max_column + 1):
+                    cell = ws.cell(row=excel_row, column=col_idx)
+                    current_font = cell.font
+                    if current_font:
+                        cell.font = Font(
+                            name=current_font.name,
+                            size=current_font.size,
+                            bold=current_font.bold,
+                            italic=current_font.italic,
+                            strike=current_font.strike,
+                            underline=current_font.underline,
+                            color="FF0000"
+                        )
+                    else:
+                        cell.font = Font(color="FF0000")
+                        
     buffer = io.BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
