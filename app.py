@@ -439,7 +439,7 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
 elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     titulo_estilizado("Pesquisa para Remição")
     
-    st.subheader("1. Carregar Arquivos")
+    st.subheader("1. Carregar Arquivos e Configurar Abas e Campos")
     uploaded_files = st.file_uploader("Selecione um ou mais arquivos (.xlsx)", type=["xlsx"], accept_multiple_files=True, key="search_upload")
     
     if uploaded_files:
@@ -449,43 +449,65 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             xl = pd.ExcelFile(f)
             sheets_available = xl.sheet_names
             
-            with st.expander(f"Configurações para: {f.name}"):
+            with st.expander(f"📁 Configurações para: {f.name}", expanded=True):
                 selected_sheets = st.multiselect(f"Selecione até 2 abas para {f.name}", sheets_available, default=sheets_available[:2] if sheets_available else None, max_selections=2, key=f"sheets_{f.name}")
                 
-                sheet_headers = {}
+                sheet_config = {}
                 for i, sheet in enumerate(selected_sheets):
+                    st.markdown(f"**Aba: `{sheet}`**")
                     default_header = 11 if i == 0 else 10
-                    header_row = st.number_input(f"Linha cabeçalho para aba '{sheet}'", value=default_header, min_value=1, key=f"head_{f.name}_{sheet}")
-                    sheet_headers[sheet] = header_row - 1
+                    header_row = st.number_input(f"Linha do cabeçalho para aba '{sheet}'", value=default_header, min_value=1, key=f"head_{f.name}_{sheet}")
+                    
+                    # Lê os campos/colunas da aba dinamicamente com base na linha de cabeçalho escolhida
+                    try:
+                        f.seek(0)
+                        df_preview = pd.read_excel(f, sheet_name=sheet, header=header_row-1, nrows=0)
+                        cols_aba = list(df_preview.columns)
+                    except:
+                        cols_aba = []
+                    
+                    # Exibe os campos encontrados nesta aba para escolha
+                    opcoes_colunas = ["--- Não filtrar por coluna nesta aba ---"] + cols_aba
+                    col_escolhida = st.selectbox(f"Selecione o campo de busca na aba '{sheet}':", opcoes_colunas, key=f"col_search_{f.name}_{sheet}")
+                    
+                    val_escolhido = ""
+                    if col_escolhida != "--- Não filtrar por coluna nesta aba ---":
+                        val_escolhido = st.text_input(f"Valor a pesquisar no campo '{col_escolhida}' ({sheet}):", key=f"val_search_{f.name}_{sheet}")
+                    
+                    sheet_config[sheet] = {
+                        "header_idx": header_row - 1,
+                        "col_busca": col_escolhida if col_escolhida != "--- Não filtrar por coluna nesta aba ---" else None,
+                        "val_busca": val_escolhido
+                    }
+                    st.markdown("---")
                 
-                settings[f.name] = sheet_headers
+                settings[f.name] = sheet_config
         
-        st.markdown("---")
-        st.subheader("2. Parâmetros de Pesquisa")
-        search_col = st.text_input("Nome da coluna para filtrar por valor (ex: 'Status'):")
-        search_val = st.text_input("Valor a pesquisar nesta coluna (ex: 'Pendente'):")
-        name_filter = st.text_input("Filtro por NOME (nome do interno/trabalhador):")
+        st.subheader("2. Filtro Global (Opcional)")
+        name_filter = st.text_input("Filtro por NOME (procura em todas as colunas se desejar):")
         
         if st.button("🔍 Iniciar Pesquisa"):
             all_results = []
             
             for f in uploaded_files:
                 f.seek(0)
-                sheet_map = settings.get(f.name, {})
-                for sheet, header_idx in sheet_map.items():
+                file_cfg = settings.get(f.name, {})
+                for sheet, cfg in file_cfg.items():
                     try:
-                        df_tmp = pd.read_excel(f, sheet_name=sheet, header=header_idx)
+                        df_tmp = pd.read_excel(f, sheet_name=sheet, header=cfg["header_idx"])
                         
-                        # Filtro por Nome (procura em todas as colunas se não especificado)
+                        # Filtro por Nome (global)
                         if name_filter:
                             df_tmp = df_tmp[df_tmp.apply(lambda row: row.astype(str).str.contains(name_filter, case=False).any(), axis=1)]
                         
-                        # Filtro por Coluna Específica
-                        if search_col and search_val:
-                            if search_col in df_tmp.columns:
-                                df_tmp = df_tmp[df_tmp[search_col].astype(str) == str(search_val)]
+                        # Filtro específico da aba escolhida nos selects
+                        target_col = cfg["col_busca"]
+                        target_val = cfg["val_busca"]
+                        if target_col and target_val:
+                            if target_col in df_tmp.columns:
+                                df_tmp = df_tmp[df_tmp[target_col].astype(str).str.contains(target_val, case=False, na=False)]
                             else:
-                                st.warning(f"Coluna '{search_col}' não encontrada na aba '{sheet}' do arquivo {f.name}")
+                                st.warning(f"Coluna '{target_col}' não encontrada na aba '{sheet}' do arquivo {f.name}")
                         
                         if not df_tmp.empty:
                             df_tmp['__ORIGEM__'] = f"{f.name} ({sheet})"
