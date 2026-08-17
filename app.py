@@ -426,7 +426,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     default_col = None
                     
                     if "COM REMUNER" in sheet_upper:
-                        # Para 'COM REMUNERAÇÃO': Procura 'NOME' ou Coluna I (índice 8)
                         for c in cols_aba:
                             if str(c).strip().upper() == "NOME":
                                 default_col = c
@@ -434,7 +433,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         if not default_col and len(cols_aba) > 8:
                             default_col = cols_aba[8]
                     elif "SEM REMUNER" in sheet_upper:
-                        # Para 'SEM REMUNERAÇÃO': Procura 'NOME DO INTERNO' ou Coluna I (índice 8)
                         for c in cols_aba:
                             if str(c).strip().upper() == "NOME DO INTERNO":
                                 default_col = c
@@ -442,7 +440,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         if not default_col and len(cols_aba) > 8:
                             default_col = cols_aba[8]
                     else:
-                        # Para outros arquivos / abas: Procura 'NOME' ou Coluna I
                         for c in cols_aba:
                             if str(c).strip().upper() == "NOME":
                                 default_col = c
@@ -512,14 +509,19 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         
         cols_para_ver = st.multiselect("Selecione os campos que deseja visualizar:", options=lista_colunas_full, default=cols_controle, key="cols_ver_op3")
         
-        # --- NOVO CAMPO DE BUSCA ÚNICO E SIMULTÂNEO ---
-        busca = st.text_input("🔍 Digite para pesquisar nos campos previamente escolhidos:", key="busca_texto_op3")
+        # --- NOVO CAMPO COM ROLAGEM, DIGITAÇÃO E SELEÇÃO DE MÚLTIPLOS NOMES ---
+        nomes_disponiveis = sorted(df_pesq['Nome (Visualização)'].dropna().unique())
+        nomes_selecionados = st.multiselect(
+            "🔍 Digite para pesquisar e selecione o(s) nome(s):",
+            options=nomes_disponiveis,
+            key="busca_nomes_op3"
+        )
         
         df_view = df_pesq.copy()
         
         # APLICANDO A BUSCA
-        if busca.strip():
-            df_view = df_view[df_view['Valor_Busca'].str.contains(busca.strip(), case=False, na=False)]
+        if nomes_selecionados:
+            df_view = df_view[df_view['Nome (Visualização)'].isin(nomes_selecionados)]
             
         st.metric("Total de Registros Encontrados", len(df_view))
         
