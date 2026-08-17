@@ -373,7 +373,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             xl = pd.ExcelFile(f)
             sheets_available = xl.sheet_names
             
-            # Lógica solicitada para pré-seleção das abas padrão
             if len(sheets_available) > 1:
                 default_sheets = [s for s in sheets_available if any(t in s.upper() for t in ["COM REMUNERAÇÃO", "SEM REMUNERAÇÃO"])]
                 if not default_sheets:
@@ -397,8 +396,42 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     except:
                         cols_aba = []
                     
+                    # Definição automática inteligente das colunas padrão de acordo com a regra solicitada
+                    default_col_index = 0
+                    upper_sheet = sheet.upper()
+                    
+                    if "COM REMUNERAÇÃO" in upper_sheet:
+                        # Tenta encontrar 'NOME' ou a coluna I (índice 8 se houver pelo menos 9 colunas)
+                        candidatos = [c for c in cols_aba if str(c).strip().upper() == "NOME"]
+                        if candidatos:
+                            col_default_val = candidatos[0]
+                        elif len(cols_aba) >= 9:
+                            col_default_val = cols_aba[8] # Coluna I (0-indexed = 8)
+                        elif cols_aba:
+                            col_default_val = cols_aba[0]
+                        else:
+                            col_default_val = "--- Não pesquisar nesta aba ---"
+                    elif "SEM REMUNERAÇÃO" in upper_sheet:
+                        # Tenta encontrar 'NOME DO INTERNO' ou a coluna I (índice 8)
+                        candidatos = [c for c in cols_aba if str(c).strip().upper() == "NOME DO INTERNO"]
+                        if candidatos:
+                            col_default_val = candidatos[0]
+                        elif len(cols_aba) >= 9:
+                            col_default_val = cols_aba[8] # Coluna I
+                        elif cols_aba:
+                            col_default_val = cols_aba[0]
+                        else:
+                            col_default_val = "--- Não pesquisar nesta aba ---"
+                    else:
+                        col_default_val = cols_aba[0] if cols_aba else "--- Não pesquisar nesta aba ---"
+
                     opcoes_colunas = ["--- Não pesquisar nesta aba ---"] + cols_aba
-                    col_escolhida = st.selectbox(f"Selecione o campo (coluna) para a pesquisa na aba '{sheet}':", opcoes_colunas, key=f"col_search_{f.name}_{sheet}")
+                    try:
+                        default_idx = opcoes_colunas.index(col_default_val)
+                    except ValueError:
+                        default_idx = 0
+
+                    col_escolhida = st.selectbox(f"Selecione o campo (coluna) para a pesquisa na aba '{sheet}':", opcoes_colunas, index=default_idx, key=f"col_search_{f.name}_{sheet}")
                     
                     sheet_config[sheet] = {
                         "header_idx": header_row - 1,
