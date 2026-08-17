@@ -485,16 +485,16 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         df_tmp = pd.read_excel(f, sheet_name=sheet, header=cfg["header_idx"])
                         target_col = cfg["col_busca"]
                         if target_col and target_col in df_tmp.columns:
-                            df_tmp['__ORIGEM_ARQUIVO__'] = f.name
-                            df_tmp['__ORIGEM_ABA__'] = sheet
-                            df_tmp['__CAMPO_PESQUISADO__'] = target_col
+                            # Unificando as informações
+                            df_tmp['Origem (Arquivo/Aba)'] = f"{f.name} / {sheet}"
+                            df_tmp['Campo Pesquisado'] = target_col
                             all_results.append(df_tmp)
                     except Exception as e:
                         st.error(f"Erro ao ler {f.name} - Aba {sheet}: {e}")
             
             if all_results:
                 st.session_state['pesquisa_df'] = pd.concat(all_results, ignore_index=True)
-                st.success(f"Dados consolidados com sucesso! **{len(st.session_state['pesquisa_df'])}** registros carregados no total.")
+                st.success(f"Dados consolidados com sucesso! **{len(st.session_state['pesquisa_df'])}** registros carregados.")
             else:
                 st.warning("Nenhum dado encontrado com as configurações informadas.")
                 st.session_state['pesquisa_df'] = None
@@ -508,8 +508,17 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.markdown("---")
         st.subheader("🔍 Filtros de Visualização e Busca")
         
-        # Seleção de campos para visualizar (Inicia vazia para você escolher exatamente os que quer ver)
-        cols_para_ver = st.multiselect("Selecione os campos que deseja visualizar:", df_pesq.columns.tolist(), default=[], key="cols_ver_op3")
+        # Colunas de identificação unificadas
+        cols_controle = ['Origem (Arquivo/Aba)', 'Campo Pesquisado']
+        outras_cols = [c for c in df_pesq.columns if c not in cols_controle]
+        lista_colunas_full = cols_controle + outras_cols
+        
+        cols_para_ver = st.multiselect(
+            "Selecione os campos que deseja visualizar:", 
+            options=lista_colunas_full, 
+            default=cols_controle, # Já seleciona a origem e o campo por padrão
+            key="cols_ver_op3"
+        )
         
         col_filtro, val_filtro = st.columns(2)
         with col_filtro:
@@ -529,7 +538,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             st.dataframe(df_view[cols_para_ver], use_container_width=True)
         else:
             st.info("ℹ️ Selecione ao menos um campo acima para exibir a tabela de visualização.")
-
+            
 # --- DEMAIS OPÇÕES ---
 elif menu_opcao == "LIMPAR ARQUIVO":
     if st.button("🗑️ Limpar Tudo"): st.session_state.clear(); st.rerun()
