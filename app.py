@@ -439,7 +439,7 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
 elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     titulo_estilizado("Pesquisa para Remição")
     
-    st.subheader("1. Carregar Arquivos e Configurar Abas e Campos")
+    st.subheader("1. Configuração de Abas e Campos por Arquivo")
     uploaded_files = st.file_uploader("Selecione um ou mais arquivos (.xlsx)", type=["xlsx"], accept_multiple_files=True, key="search_upload")
     
     if uploaded_files:
@@ -466,27 +466,26 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     except:
                         cols_aba = []
                     
-                    # Exibe os campos encontrados nesta aba para escolha
-                    opcoes_colunas = ["--- Não filtrar por coluna nesta aba ---"] + cols_aba
-                    col_escolhida = st.selectbox(f"Selecione o campo de busca na aba '{sheet}':", opcoes_colunas, key=f"col_search_{f.name}_{sheet}")
-                    
-                    val_escolhido = ""
-                    if col_escolhida != "--- Não filtrar por coluna nesta aba ---":
-                        val_escolhido = st.text_input(f"Valor a pesquisar no campo '{col_escolhida}' ({sheet}):", key=f"val_search_{f.name}_{sheet}")
+                    # Exibe os campos encontrados nesta aba para escolha do campo de busca
+                    opcoes_colunas = ["--- Não pesquisar nesta aba ---"] + cols_aba
+                    col_escolhida = st.selectbox(f"Selecione o campo (coluna) para a pesquisa na aba '{sheet}':", opcoes_colunas, key=f"col_search_{f.name}_{sheet}")
                     
                     sheet_config[sheet] = {
                         "header_idx": header_row - 1,
-                        "col_busca": col_escolhida if col_escolhida != "--- Não filtrar por coluna nesta aba ---" else None,
-                        "val_busca": val_escolhido
+                        "col_busca": col_escolhida if col_escolhida != "--- Não pesquisar nesta aba ---" else None
                     }
                     st.markdown("---")
                 
                 settings[f.name] = sheet_config
         
-        st.subheader("2. Filtro Global (Opcional)")
-        name_filter = st.text_input("Filtro por NOME (procura em todas as colunas se desejar):")
+        st.subheader("2. Valor da Pesquisa")
+        search_val = st.text_input("🔍 Digite o valor único que deseja pesquisar nos campos selecionados:")
         
         if st.button("🔍 Iniciar Pesquisa"):
+            if not search_val.strip():
+                st.error("Digite um valor para pesquisar!")
+                st.stop()
+                
             all_results = []
             
             for f in uploaded_files:
@@ -496,28 +495,25 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     try:
                         df_tmp = pd.read_excel(f, sheet_name=sheet, header=cfg["header_idx"])
                         
-                        # Filtro por Nome (global)
-                        if name_filter:
-                            df_tmp = df_tmp[df_tmp.apply(lambda row: row.astype(str).str.contains(name_filter, case=False).any(), axis=1)]
-                        
-                        # Filtro específico da aba escolhida nos selects
                         target_col = cfg["col_busca"]
-                        target_val = cfg["val_busca"]
-                        if target_col and target_val:
-                            if target_col in df_tmp.columns:
-                                df_tmp = df_tmp[df_tmp[target_col].astype(str).str.contains(target_val, case=False, na=False)]
-                            else:
+                        if target_col and target_col in df_tmp.columns:
+                            # Filtra apenas na coluna selecionada para esta aba usando o valor único de busca
+                            df_tmp = df_tmp[df_tmp[target_col].astype(str).str.contains(search_val, case=False, na=False)]
+                            
+                            if not df_tmp.empty:
+                                df_tmp['__ORIGEM_ARQUIVO__'] = f.name
+                                df_tmp['__ORIGEM_ABA__'] = sheet
+                                df_tmp['__CAMPO_PESQUISADO__'] = target_col
+                                all_results.append(df_tmp)
+                        else:
+                            if target_col:
                                 st.warning(f"Coluna '{target_col}' não encontrada na aba '{sheet}' do arquivo {f.name}")
-                        
-                        if not df_tmp.empty:
-                            df_tmp['__ORIGEM__'] = f"{f.name} ({sheet})"
-                            all_results.append(df_tmp)
                     except Exception as e:
                         st.error(f"Erro ao ler {f.name} - Aba {sheet}: {e}")
             
             if all_results:
                 final_df = pd.concat(all_results, ignore_index=True)
-                st.success(f"Foram encontrados {len(final_df)} resultados.")
+                st.success(f"Foram encontrados **{len(final_df)}** resultado(s).")
                 st.dataframe(final_df, use_container_width=True)
             else:
                 st.warning("Nenhum resultado encontrado com os critérios fornecidos.")
