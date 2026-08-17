@@ -434,7 +434,7 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                 file_bytes = gerar_arquivo_atualizado_bytes(io.BytesIO(st.session_state["wb_data"]), header, st.session_state['fila_modificacoes'], df, sheet_name=target_sheet)
                 st.download_button("📥 Baixar Arquivo Atualizado", file_bytes, "sinale_atualizado_final.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-# --- OPÇÃO 3: PESQUISA PARA REMIÇÃO (ATUALIZADA COM O MODELO DA OPÇÃO 2) ---
+# --- OPÇÃO 3: PESQUISA PARA REMIÇÃO ---
 elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     titulo_estilizado("Pesquisa para Remição")
     
@@ -502,13 +502,14 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     else:
         st.session_state['pesquisa_df'] = None
 
-    # Se já temos os dados carregados, exibe o modelo exato de filtros da Opção 2
     if st.session_state.get('pesquisa_df') is not None:
         df_pesq = st.session_state['pesquisa_df']
         
         st.markdown("---")
-        st.subheader("🔍 Filtros de Visualização e Busca (Modelo Opção 2)")
-        cols_para_ver = st.multiselect("Quais campos deseja visualizar?", df_pesq.columns.tolist(), default=df_pesq.columns.tolist(), key="cols_ver_op3")
+        st.subheader("🔍 Filtros de Visualização e Busca")
+        
+        # Seleção de campos para visualizar (Inicia vazia para você escolher exatamente os que quer ver)
+        cols_para_ver = st.multiselect("Selecione os campos que deseja visualizar:", df_pesq.columns.tolist(), default=[], key="cols_ver_op3")
         
         col_filtro, val_filtro = st.columns(2)
         with col_filtro:
@@ -523,7 +524,11 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             df_view = df_view[df_view[filtro_col].astype(str).isin(filtro_vals)]
         
         st.metric("Total de Registros Encontrados", len(df_view))
-        st.dataframe(df_view[cols_para_ver], use_container_width=True)
+        
+        if cols_para_ver:
+            st.dataframe(df_view[cols_para_ver], use_container_width=True)
+        else:
+            st.info("ℹ️ Selecione ao menos um campo acima para exibir a tabela de visualização.")
 
 # --- DEMAIS OPÇÕES ---
 elif menu_opcao == "LIMPAR ARQUIVO":
