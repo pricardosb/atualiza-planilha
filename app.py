@@ -364,7 +364,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     titulo_estilizado("Pesquisa para Remição")
     
     st.subheader("1. Configuração de Arquivos, Abas e Campos")
-    # ADICIONADO .ods
     uploaded_files = st.file_uploader("Selecione um ou mais arquivos (.xlsx, .xls, .ods)", type=["xlsx", "xls", "ods"], accept_multiple_files=True, key="search_upload")
     
     if uploaded_files:
@@ -374,8 +373,16 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             xl = pd.ExcelFile(f)
             sheets_available = xl.sheet_names
             
+            # Lógica solicitada para pré-seleção das abas padrão
+            if len(sheets_available) > 1:
+                default_sheets = [s for s in sheets_available if any(t in s.upper() for t in ["COM REMUNERAÇÃO", "SEM REMUNERAÇÃO"])]
+                if not default_sheets:
+                    default_sheets = sheets_available[:2]
+            else:
+                default_sheets = sheets_available
+            
             with st.expander(f"📁 Configurações para: {f.name}", expanded=True):
-                selected_sheets = st.multiselect(f"Selecione até 2 abas para {f.name}", sheets_available, default=sheets_available[:2] if sheets_available else None, max_selections=2, key=f"sheets_{f.name}")
+                selected_sheets = st.multiselect(f"Selecione as abas para {f.name}", sheets_available, default=default_sheets, key=f"sheets_{f.name}")
                 
                 sheet_config = {}
                 for i, sheet in enumerate(selected_sheets):
