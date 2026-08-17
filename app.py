@@ -167,6 +167,34 @@ def gerar_arquivo_atualizado_bytes(source_input, header, fila, df_original, shee
 def titulo_estilizado(subtitulo=""):
     st.markdown(f"<div style='text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border-radius: 12px; margin-bottom: 1.5rem;'><h1>⚡ SINALE WEB</h1><p>{subtitulo}</p></div>", unsafe_allow_html=True)
 
+def extrair_mes_ano_m9(file_bytes, sheets_available):
+    """Extrai a informação de MÊS/ANO na célula M9 (Linha 9, Coluna M/13) da aba 'COM REMUNERAÇÃO'."""
+    try:
+        # Tenta localizar a aba 'COM REMUNERAÇÃO'
+        target_sheet = None
+        for s in sheets_available:
+            if "COM REMUNER" in s.strip().upper():
+                target_sheet = s
+                break
+        if not target_sheet and sheets_available:
+            target_sheet = sheets_available[0]
+            
+        file_bytes.seek(0)
+        # Lê até a linha 9 (sem cabeçalho)
+        df_cell = pd.read_excel(file_bytes, sheet_name=target_sheet, header=None, nrows=9)
+        val = df_cell.iloc[8, 12] # Linha 9 (índice 8), Coluna M (índice 12)
+        
+        if pd.isna(val) or str(val).strip() == "":
+            return "SEM MÊS/ANO"
+            
+        if isinstance(val, (datetime.datetime, datetime.date)):
+            return val.strftime("%m/%Y")
+            
+        val_str = str(val).strip()
+        return val_str
+    except Exception:
+        return "SEM MÊS/ANO"
+
 # --- MENU ---
 menu_opcao = st.sidebar.radio("Selecione a rotina:", [
     "INCLUSÃO DE TRABALHO",
@@ -446,13 +474,17 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             all_results = []
             for f in uploaded_files:
                 f.seek(0)
+                xl = pd.ExcelFile(f)
+                mes_ano_m9 = extrair_mes_ano_m9(f, xl.sheet_names)
+                
                 file_cfg = settings.get(f.name, {})
                 for sheet, cfg in file_cfg.items():
                     try:
+                        f.seek(0)
                         df_tmp = pd.read_excel(f, sheet_name=sheet, header=cfg["header_idx"])
                         target_col = cfg["col_busca"]
                         if target_col and target_col in df_tmp.columns:
-                            df_tmp['Origem (Arquivo/Aba)'] = f"{f.name} / {sheet}"
+                            df_tmp['MÊS/ANO - ABA'] = f"{mes_ano_m9} - {sheet}"
                             df_tmp['Campo Pesquisado'] = target_col
                             all_results.append(df_tmp)
                     except Exception as e:
@@ -472,7 +504,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.markdown("---")
         st.subheader("🔍 Filtros de Visualização e Busca")
         
-        cols_controle = ['Origem (Arquivo/Aba)', 'Campo Pesquisado']
+        cols_controle = ['MÊS/ANO - ABA', 'Campo Pesquisado']
         outras_cols = [c for c in df_pesq.columns if c not in cols_controle]
         lista_colunas_full = cols_controle + outras_cols
         
