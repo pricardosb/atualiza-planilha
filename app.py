@@ -445,11 +445,15 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     if uploaded_files:
         settings = {}
         for f in uploaded_files:
+            f.seek(0)
+            xl = pd.ExcelFile(f)
+            sheets_available = xl.sheet_names
+            
             with st.expander(f"Configurações para: {f.name}"):
                 c1, c2 = st.columns(2)
-                sheets = st.text_input(f"Abas (separadas por vírgula, máx 2) para {f.name}", value="Plan1", key=f"sheets_{f.name}")
+                selected_sheets = st.multiselect(f"Selecione até 2 abas para {f.name}", sheets_available, default=sheets_available[:2] if sheets_available else None, max_selections=2, key=f"sheets_{f.name}")
                 header_row = st.number_input(f"Linha cabeçalho para {f.name}", value=1, min_value=1, key=f"head_{f.name}")
-                settings[f.name] = {"sheets": [s.strip() for s in sheets.split(",")], "header": header_row-1}
+                settings[f.name] = {"sheets": selected_sheets, "header": header_row-1}
         
         st.markdown("---")
         st.subheader("2. Parâmetros de Pesquisa")
