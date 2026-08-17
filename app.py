@@ -450,10 +450,15 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             sheets_available = xl.sheet_names
             
             with st.expander(f"Configurações para: {f.name}"):
-                c1, c2 = st.columns(2)
                 selected_sheets = st.multiselect(f"Selecione até 2 abas para {f.name}", sheets_available, default=sheets_available[:2] if sheets_available else None, max_selections=2, key=f"sheets_{f.name}")
-                header_row = st.number_input(f"Linha cabeçalho para {f.name}", value=1, min_value=1, key=f"head_{f.name}")
-                settings[f.name] = {"sheets": selected_sheets, "header": header_row-1}
+                
+                sheet_headers = {}
+                for i, sheet in enumerate(selected_sheets):
+                    default_header = 11 if i == 0 else 10
+                    header_row = st.number_input(f"Linha cabeçalho para aba '{sheet}'", value=default_header, min_value=1, key=f"head_{f.name}_{sheet}")
+                    sheet_headers[sheet] = header_row - 1
+                
+                settings[f.name] = sheet_headers
         
         st.markdown("---")
         st.subheader("2. Parâmetros de Pesquisa")
@@ -466,10 +471,10 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             
             for f in uploaded_files:
                 f.seek(0)
-                conf = settings[f.name]
-                for sheet in conf["sheets"]:
+                sheet_map = settings.get(f.name, {})
+                for sheet, header_idx in sheet_map.items():
                     try:
-                        df_tmp = pd.read_excel(f, sheet_name=sheet, header=conf["header"])
+                        df_tmp = pd.read_excel(f, sheet_name=sheet, header=header_idx)
                         
                         # Filtro por Nome (procura em todas as colunas se não especificado)
                         if name_filter:
