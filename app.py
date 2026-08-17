@@ -170,7 +170,6 @@ def titulo_estilizado(subtitulo=""):
 def extrair_mes_ano_m9(file_bytes, sheets_available):
     """Extrai a informação de MÊS/ANO na célula M9 (Linha 9, Coluna M/13) da aba 'COM REMUNERAÇÃO'."""
     try:
-        # Tenta localizar a aba 'COM REMUNERAÇÃO'
         target_sheet = None
         for s in sheets_available:
             if "COM REMUNER" in s.strip().upper():
@@ -180,7 +179,6 @@ def extrair_mes_ano_m9(file_bytes, sheets_available):
             target_sheet = sheets_available[0]
             
         file_bytes.seek(0)
-        # Lê até a linha 9 (sem cabeçalho)
         df_cell = pd.read_excel(file_bytes, sheet_name=target_sheet, header=None, nrows=9)
         val = df_cell.iloc[8, 12] # Linha 9 (índice 8), Coluna M (índice 12)
         
@@ -402,11 +400,16 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             sheets_available = xl.sheet_names
             
             with st.expander(f"📁 Configurações para: {f.name}", expanded=True):
-                # Regra de seleção automática de abas: 'COM REMUNERAÇÃO' e 'SEM REMUNERAÇÃO'
+                # Regra de seleção automática de abas: 
+                # Procura por 'COM REMUNERAÇÃO' e 'SEM REMUNERAÇÃO'.
+                # Se não encontrar nenhuma delas, considera apenas a primeira aba do arquivo.
                 pref_sheets = [s for s in sheets_available if any(p in s.strip().upper() for p in ["COM REMUNER", "SEM REMUNER"])]
-                default_sheets = pref_sheets if pref_sheets else (sheets_available[:2] if sheets_available else [])
+                if not pref_sheets and sheets_available:
+                    default_sheets = [sheets_available[0]]
+                else:
+                    default_sheets = pref_sheets
                 
-                selected_sheets = st.multiselect(f"Selecione até 2 abas para {f.name}", sheets_available, default=default_sheets, max_selections=2, key=f"sheets_{f.name}")
+                selected_sheets = st.multiselect(f"Selecione aba(s) para {f.name}", sheets_available, default=default_sheets, max_selections=2, key=f"sheets_{f.name}")
                 
                 sheet_config = {}
                 for i, sheet in enumerate(selected_sheets):
@@ -509,7 +512,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         
         cols_para_ver = st.multiselect("Selecione os campos que deseja visualizar:", options=lista_colunas_full, default=cols_controle, key="cols_ver_op3")
         
-        # --- NOVO CAMPO COM ROLAGEM, DIGITAÇÃO E SELEÇÃO DE MÚLTIPLOS NOMES ---
         nomes_disponiveis = sorted(df_pesq['Nome (Visualização)'].dropna().unique())
         nomes_selecionados = st.multiselect(
             "🔍 Digite para pesquisar e selecione o(s) nome(s):",
@@ -519,7 +521,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         
         df_view = df_pesq.copy()
         
-        # APLICANDO A BUSCA
         if nomes_selecionados:
             df_view = df_view[df_view['Nome (Visualização)'].isin(nomes_selecionados)]
             
