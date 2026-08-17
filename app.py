@@ -484,8 +484,11 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         df_tmp = pd.read_excel(f, sheet_name=sheet, header=cfg["header_idx"])
                         target_col = cfg["col_busca"]
                         if target_col and target_col in df_tmp.columns:
+                            # --- MODIFICAÇÕES APLICADAS AQUI ---
                             df_tmp['MÊS/ANO - ABA'] = f"{mes_ano_m9} - {sheet}"
                             df_tmp['Campo Pesquisado'] = target_col
+                            df_tmp['Nome (Visualização)'] = df_tmp[target_col].astype(str) + f" - {sheet}"
+                            # -----------------------------------
                             all_results.append(df_tmp)
                     except Exception as e:
                         st.error(f"Erro ao ler {f.name} - Aba {sheet}: {e}")
@@ -504,9 +507,11 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.markdown("---")
         st.subheader("🔍 Filtros de Visualização e Busca")
         
-        cols_controle = ['MÊS/ANO - ABA', 'Campo Pesquisado']
+        # --- MODIFICAÇÕES APLICADAS AQUI ---
+        cols_controle = ['MÊS/ANO - ABA', 'Nome (Visualização)', 'Campo Pesquisado']
         outras_cols = [c for c in df_pesq.columns if c not in cols_controle]
         lista_colunas_full = cols_controle + outras_cols
+        # -----------------------------------
         
         cols_para_ver = st.multiselect("Selecione os campos que deseja visualizar:", options=lista_colunas_full, default=cols_controle, key="cols_ver_op3")
         
