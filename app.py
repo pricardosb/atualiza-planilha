@@ -18,6 +18,7 @@ if 'last_dest_name' not in st.session_state: st.session_state['last_dest_name'] 
 if 'fila_modificacoes' not in st.session_state: st.session_state['fila_modificacoes'] = []
 if 'select_all' not in st.session_state: st.session_state['select_all'] = False
 if 'file_settings' not in st.session_state: st.session_state['file_settings'] = {}
+if 'pesquisa_df' not in st.session_state: st.session_state['pesquisa_df'] = None
 
 # --- FUNÇÕES DE SUPORTE ---
 def copiar_estilo_completo(origem, destino):
@@ -142,7 +143,6 @@ def gerar_arquivo_atualizado_bytes(source_input, header, fila, df_original, shee
             excel_row = idx + header + 1
             ws.cell(row=excel_row, column=df_original.columns.get_loc(col_target) + 1, value=valor_convertido)
             
-            # Se o campo atualizado for SAIDA (ou SAÍDA), pinta toda a linha de vermelho
             if col_target.strip().upper() in ["SAIDA", "SAÍDA"]:
                 for col_idx in range(1, ws.max_column + 1):
                     cell = ws.cell(row=excel_row, column=col_idx)
@@ -177,7 +177,7 @@ menu_opcao = st.sidebar.radio("Selecione a rotina:", [
     "SAIR DO SISTEMA"
 ])
 
-# --- OPÇÃO 1: INCLUSÃO DE TRABALHO (TRAVADA) ---
+# --- OPÇÃO 1: INCLUSÃO DE TRABALHO (MANTIDA INTACTA) ---
 if menu_opcao == "INCLUSÃO DE TRABALHO":
     titulo_estilizado("INTEGRADOR ==> DADOS GERAIS DO INTERNO >>> SINALE")
     col1, col2 = st.columns(2)
@@ -272,7 +272,7 @@ if menu_opcao == "INCLUSÃO DE TRABALHO":
             st.success("✅ Processamento concluído com sucesso!")
             st.download_button("📥 Baixar Versão Atualizada", st.session_state["wb_data"], "sinale_atualizado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS (TRAVADA) ---
+# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS (MANTIDA INTACTA) ---
 elif menu_opcao == "ATUALIZAÇÕES GERAIS":
     titulo_estilizado("Atualizações Gerais")
     
@@ -333,7 +333,6 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         if not selecionados.empty:
             col_target = st.selectbox("Selecione a coluna que deseja alterar:", df.columns, key="col_target_op2")
             
-            # Se a coluna for DIAS, exibe seletor de Mês/Ano e calcula os dias úteis / feriados antes de mostrar o valor antigo
             if col_target.strip().upper() == "DIAS":
                 st.markdown("---")
                 st.subheader("📅 Cálculo Automático de Dias Úteis (Seg a Sáb / Seg a Sex)")
@@ -435,11 +434,11 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                 file_bytes = gerar_arquivo_atualizado_bytes(io.BytesIO(st.session_state["wb_data"]), header, st.session_state['fila_modificacoes'], df, sheet_name=target_sheet)
                 st.download_button("📥 Baixar Arquivo Atualizado", file_bytes, "sinale_atualizado_final.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-# --- OPÇÃO 3: PESQUISA PARA REMIÇÃO ---
+# --- OPÇÃO 3: PESQUISA PARA REMIÇÃO (ATUALIZADA COM O MODELO DA OPÇÃO 2) ---
 elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     titulo_estilizado("Pesquisa para Remição")
     
-    st.subheader("1. Configuração de Abas e Campos por Arquivo")
+    st.subheader("1. Configuração de Arquivos, Abas e Campos")
     uploaded_files = st.file_uploader("Selecione um ou mais arquivos (.xlsx)", type=["xlsx"], accept_multiple_files=True, key="search_upload")
     
     if uploaded_files:
@@ -458,7 +457,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     default_header = 11 if i == 0 else 10
                     header_row = st.number_input(f"Linha do cabeçalho para aba '{sheet}'", value=default_header, min_value=1, key=f"head_{f.name}_{sheet}")
                     
-                    # Lê os campos/colunas da aba dinamicamente com base na linha de cabeçalho escolhida
                     try:
                         f.seek(0)
                         df_preview = pd.read_excel(f, sheet_name=sheet, header=header_row-1, nrows=0)
@@ -466,7 +464,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     except:
                         cols_aba = []
                     
-                    # Exibe os campos encontrados nesta aba para escolha do campo de busca
                     opcoes_colunas = ["--- Não pesquisar nesta aba ---"] + cols_aba
                     col_escolhida = st.selectbox(f"Selecione o campo (coluna) para a pesquisa na aba '{sheet}':", opcoes_colunas, key=f"col_search_{f.name}_{sheet}")
                     
@@ -478,45 +475,55 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 
                 settings[f.name] = sheet_config
         
-        st.subheader("2. Valor da Pesquisa")
-        search_val = st.text_input("🔍 Digite o valor único que deseja pesquisar nos campos selecionados:")
-        
-        if st.button("🔍 Iniciar Pesquisa"):
-            if not search_val.strip():
-                st.error("Digite um valor para pesquisar!")
-                st.stop()
-                
+        if st.button("🔍 Carregar e Consolidar Dados para Pesquisa", key="btn_consolidar_op3"):
             all_results = []
-            
             for f in uploaded_files:
                 f.seek(0)
                 file_cfg = settings.get(f.name, {})
                 for sheet, cfg in file_cfg.items():
                     try:
                         df_tmp = pd.read_excel(f, sheet_name=sheet, header=cfg["header_idx"])
-                        
                         target_col = cfg["col_busca"]
                         if target_col and target_col in df_tmp.columns:
-                            # Filtra apenas na coluna selecionada para esta aba usando o valor único de busca
-                            df_tmp = df_tmp[df_tmp[target_col].astype(str).str.contains(search_val, case=False, na=False)]
-                            
-                            if not df_tmp.empty:
-                                df_tmp['__ORIGEM_ARQUIVO__'] = f.name
-                                df_tmp['__ORIGEM_ABA__'] = sheet
-                                df_tmp['__CAMPO_PESQUISADO__'] = target_col
-                                all_results.append(df_tmp)
-                        else:
-                            if target_col:
-                                st.warning(f"Coluna '{target_col}' não encontrada na aba '{sheet}' do arquivo {f.name}")
+                            df_tmp['__ORIGEM_ARQUIVO__'] = f.name
+                            df_tmp['__ORIGEM_ABA__'] = sheet
+                            df_tmp['__CAMPO_PESQUISADO__'] = target_col
+                            all_results.append(df_tmp)
                     except Exception as e:
                         st.error(f"Erro ao ler {f.name} - Aba {sheet}: {e}")
             
             if all_results:
-                final_df = pd.concat(all_results, ignore_index=True)
-                st.success(f"Foram encontrados **{len(final_df)}** resultado(s).")
-                st.dataframe(final_df, use_container_width=True)
+                st.session_state['pesquisa_df'] = pd.concat(all_results, ignore_index=True)
+                st.success(f"Dados consolidados com sucesso! **{len(st.session_state['pesquisa_df'])}** registros carregados no total.")
             else:
-                st.warning("Nenhum resultado encontrado com os critérios fornecidos.")
+                st.warning("Nenhum dado encontrado com as configurações informadas.")
+                st.session_state['pesquisa_df'] = None
+
+    else:
+        st.session_state['pesquisa_df'] = None
+
+    # Se já temos os dados carregados, exibe o modelo exato de filtros da Opção 2
+    if st.session_state.get('pesquisa_df') is not None:
+        df_pesq = st.session_state['pesquisa_df']
+        
+        st.markdown("---")
+        st.subheader("🔍 Filtros de Visualização e Busca (Modelo Opção 2)")
+        cols_para_ver = st.multiselect("Quais campos deseja visualizar?", df_pesq.columns.tolist(), default=df_pesq.columns.tolist(), key="cols_ver_op3")
+        
+        col_filtro, val_filtro = st.columns(2)
+        with col_filtro:
+            filtro_col = st.selectbox("Coluna para buscar:", df_pesq.columns, key="filtro_col_op3")
+        
+        valores_existentes = sorted([str(v) for v in df_pesq[filtro_col].dropna().unique()])
+        with val_filtro:
+            filtro_vals = st.multiselect("Selecione o(s) valor(es) para filtrar:", valores_existentes, key="filtro_vals_op3")
+        
+        df_view = df_pesq.copy()
+        if filtro_vals:
+            df_view = df_view[df_view[filtro_col].astype(str).isin(filtro_vals)]
+        
+        st.metric("Total de Registros Encontrados", len(df_view))
+        st.dataframe(df_view[cols_para_ver], use_container_width=True)
 
 # --- DEMAIS OPÇÕES ---
 elif menu_opcao == "LIMPAR ARQUIVO":
