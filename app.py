@@ -400,9 +400,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             sheets_available = xl.sheet_names
             
             with st.expander(f"📁 Configurações para: {f.name}", expanded=True):
-                # Regra de seleção automática de abas: 
-                # Procura por 'COM REMUNERAÇÃO' e 'SEM REMUNERAÇÃO'.
-                # Se não encontrar nenhuma delas, considera apenas a primeira aba do arquivo.
                 pref_sheets = [s for s in sheets_available if any(p in s.strip().upper() for p in ["COM REMUNER", "SEM REMUNER"])]
                 if not pref_sheets and sheets_available:
                     default_sheets = [sheets_available[0]]
@@ -424,7 +421,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     except:
                         cols_aba = []
                     
-                    # Lógica de seleção inteligente da coluna de consulta por aba
                     sheet_upper = sheet.strip().upper()
                     default_col = None
                     
@@ -506,12 +502,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.markdown("---")
         st.subheader("🔍 Filtros de Visualização e Busca")
         
-        cols_controle = ['MÊS/ANO - ABA', 'Nome (Visualização)', 'Campo Pesquisado']
-        outras_cols = [c for c in df_pesq.columns if c not in cols_controle and c != 'Valor_Busca']
-        lista_colunas_full = cols_controle + outras_cols
-        
-        cols_para_ver = st.multiselect("Selecione os campos que deseja visualizar:", options=lista_colunas_full, default=cols_controle, key="cols_ver_op3")
-        
+        # 1. PRIMEIRO: Efetuar a pesquisa e seleção do nome
         nomes_disponiveis = sorted(df_pesq['Nome (Visualização)'].dropna().unique())
         nomes_selecionados = st.multiselect(
             "🔍 Digite para pesquisar e selecione o(s) nome(s):",
@@ -520,16 +511,25 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         )
         
         df_view = df_pesq.copy()
-        
         if nomes_selecionados:
             df_view = df_view[df_view['Nome (Visualização)'].isin(nomes_selecionados)]
             
         st.metric("Total de Registros Encontrados", len(df_view))
         
-        if cols_para_ver: 
-            st.dataframe(df_view[cols_para_ver], use_container_width=True)
-        else: 
-            st.info("ℹ️ Selecione ao menos um campo acima para exibir a tabela de visualização.")
+        # 2. SEGUNDO: Disponibilizar os campos da aba do nome selecionado para visualização
+        if not df_view.empty:
+            cols_controle = ['MÊS/ANO - ABA', 'Nome (Visualização)', 'Campo Pesquisado']
+            outras_cols = [c for c in df_view.columns if c not in cols_controle and c != 'Valor_Busca']
+            lista_colunas_full = cols_controle + outras_cols
+            
+            cols_para_ver = st.multiselect("Selecione os campos da(s) aba(s) correspondente(s) para visualizar:", options=lista_colunas_full, default=cols_controle, key="cols_ver_op3")
+            
+            if cols_para_ver: 
+                st.dataframe(df_view[cols_para_ver], use_container_width=True)
+            else: 
+                st.info("ℹ️ Selecione ao menos um campo acima para exibir a tabela de visualização.")
+        else:
+            st.info("ℹ️ Nenhum registro selecionado ou encontrado na pesquisa.")
 
 # --- DEMAIS OPÇÕES ---
 elif menu_opcao == "LIMPAR ARQUIVO":
