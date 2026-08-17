@@ -1,4 +1,6 @@
 import io
+import calendar
+import datetime
 import pandas as pd
 import numpy as np
 import streamlit as st
@@ -55,6 +57,79 @@ def converter_valor_inteligente(val_str, dtype_original):
         except ValueError: pass
     try: return float(val_str.replace(',', '.'))
     except ValueError: return val_str
+
+def calcular_pascoa(ano):
+    a = ano % 19
+    b = ano // 100
+    c = ano % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    L = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * L) // 451
+    mes = (h + L - 7 * m + 114) // 31
+    dia = ((h + L - 7 * m + 114) % 31) + 1
+    return datetime.date(ano, mes, dia)
+
+def obter_estatisticas_mes(ano, mes):
+    cal = calendar.monthcalendar(ano, mes)
+    pascoa = calcular_pascoa(ano)
+    feriados = [
+        datetime.date(ano, 1, 1),
+        pascoa - datetime.timedelta(days=47), # Carnaval
+        pascoa - datetime.timedelta(days=2),  # Sexta-feira Santa
+        datetime.date(ano, 4, 21),
+        datetime.date(ano, 5, 1),
+        pascoa + datetime.timedelta(days=60), # Corpus Christi
+        datetime.date(ano, 9, 7),
+        datetime.date(ano, 10, 12),
+        datetime.date(ano, 11, 2),
+        datetime.date(ano, 11, 15),
+        datetime.date(ano, 11, 20), # Consciência Negra
+        datetime.date(ano, 12, 25)
+    ]
+    feriados_mes = [f for f in feriados if f.month == mes and f.year == ano]
+    
+    dias_seg_sex_total = 0
+    dias_seg_sab_total = 0
+    feriados_seg_sex = 0
+    feriados_seg_sab = 0
+    lista_feriados_detalhes = []
+    
+    for semana in cal:
+        for i in range(7):
+            dia = semana[i]
+            if dia != 0:
+                data_atual = datetime.date(ano, mes, dia)
+                wd = data_atual.weekday() # 0=Seg, ..., 5=Sáb, 6=Dom
+                if wd < 5:
+                    dias_seg_sex_total += 1
+                    dias_seg_sab_total += 1
+                elif wd == 5:
+                    dias_seg_sab_total += 1
+                    
+                if data_atual in feriados_mes:
+                    if wd < 5:
+                        feriados_seg_sex += 1
+                        feriados_seg_sab += 1
+                        lista_feriados_detalhes.append((data_atual, "Seg a Sex"))
+                    elif wd == 5:
+                        feriados_seg_sab += 1
+                        lista_feriados_detalhes.append((data_atual, "Sábado"))
+
+    return {
+        "seg_sex_total": dias_seg_sex_total,
+        "seg_sex_feriados": feriados_seg_sex,
+        "seg_sex_uteis": dias_seg_sex_total - feriados_seg_sex,
+        "seg_sab_total": dias_seg_sab_total,
+        "seg_sab_feriados": feriados_seg_sab,
+        "seg_sab_uteis": dias_seg_sab_total - feriados_seg_sab,
+        "feriados_detalhes": lista_feriados_detalhes
+    }
 
 def gerar_arquivo_atualizado_bytes(source_input, header, fila, df_original, sheet_name=None):
     wb = load_workbook(io.BytesIO(source_input) if isinstance(source_input, bytes) else source_input)
@@ -255,6 +330,37 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         
         if not selecionados.empty:
             col_target = st.selectbox("Selecione a coluna que deseja alterar:", df.columns, key="col_target_op2")
+            
+            # Se a coluna for DIAS, exibe seletor de Mês/Ano e calcula os dias úteis / feriados antes de mostrar o valor antigo
+            if col_target.strip().upper() == "DIAS":
+                st.markdown("---")
+                st.subheader("📅 Cálculo Automático de Dias Úteis (Seg a Sáb / Seg a Sex)")
+                c_mes, c_ano = st.columns(2)
+                meses_dict = {
+                    "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4,
+                    "Maio": 5, "Junho": 6, "Julho": 7, "Agosto": 8,
+                    "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
+                }
+                with c_mes:
+                    mes_escolhido_nome = st.selectbox("Selecione o Mês:", list(meses_dict.keys()), key="sel_mes_dias")
+                    mes_num = meses_dict[mes_escolhido_nome]
+                with c_ano:
+                    ano_escolhido = st.number_input("Digite o Ano:", min_value=2020, max_value=2035, value=datetime.date.today().year, key="sel_ano_dias")
+                
+                stats = obter_estatisticas_mes(ano_escolhido, mes_num)
+                
+                st.info(f"""
+                **Resumo para {mes_escolhido_nome}/{ano_escolhido}:**
+                * **Segunda a Sábado:** {stats['seg_sab_total']} brutos | **Feriados (Seg-Sáb):** {stats['seg_sab_feriados']} | **Úteis (Seg a Sáb):** **{stats['seg_sab_uteis']}**
+                * **Segunda a Sexta:** {stats['seg_sex_total']} brutos | **Feriados (Seg-Sex):** {stats['seg_sex_feriados']} | **Úteis (Seg a Sex):** **{stats['seg_sex_uteis']}**
+                """)
+                
+                if stats['feriados_detalhes']:
+                    feriados_str = ", ".join([f"{f[0].strftime('%d/%m/%Y')}" for f in stats['feriados_detalhes']])
+                    st.write(f"📌 **Feriados no período (Seg a Sábado):** {feriados_str}")
+                else:
+                    st.write("📌 **Nenhum feriado nacional** de Segunda a Sábado neste mês/ano.")
+                st.markdown("---")
             
             valores_antigos_str = ", ".join([str(v) for v in selecionados[col_target].dropna().unique()])
             if not valores_antigos_str:
