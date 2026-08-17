@@ -351,8 +351,8 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                 
                 st.info(f"""
                 **Resumo para {mes_escolhido_nome}/{ano_escolhido}:**
-                * **Segunda a Sábado:** {stats['seg_sab_total']} brutos | **Feriados (Seg-Sáb):** {stats['seg_sab_feriados']} | **Úteis (Seg a Sáb):** **{stats['seg_sab_uteis']}**
-                * **Segunda a Sexta:** {stats['seg_sex_total']} brutos | **Feriados (Seg-Sex):** {stats['seg_sex_feriados']} | **Úteis (Seg a Sex):** **{stats['seg_sex_uteis']}**
+                * **Segunda a Sábado:** {stats['seg_sab_total']} brutos | **Feriados (Seg-Sáb):** {stats['seg_sab_feriados']} | **Úteis (Seg a Sábado):** **{stats['seg_sab_uteis']}**
+                * **Segunda a Sexta:** {stats['seg_sex_total']} brutos | **Feriados (Seg-Sex):** {stats['seg_sex_feriados']} | **Úteis (Seg a Sexta):** **{stats['seg_sex_uteis']}**
                 """)
                 
                 if stats['feriados_detalhes']:
@@ -384,23 +384,52 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         if st.session_state['fila_modificacoes']:
             st.markdown("---")
             st.subheader("📋 Fila de Modificações Pendentes")
-            df_fila_resumo = pd.DataFrame([
-                {
+            
+            dados_fila = []
+            for idx, item in enumerate(st.session_state['fila_modificacoes']):
+                dados_fila.append({
+                    "Remover?": False,
+                    "ID_ITEM": idx,
                     "QTD REG": len(item["indices"]),
                     "ABA": item.get("aba", "Geral"),
                     "VL BUSCA": item.get("vl_busca", "Todos"),
                     "CAMPO": item.get("coluna", ""),
                     "VL ANTIGO": item.get("valor_antigo", "Vazio"),
                     "NOVO VALOR": item.get("novo_valor", "")
-                }
-                for item in st.session_state['fila_modificacoes']
-            ])
-            st.dataframe(df_fila_resumo, use_container_width=True)
+                })
             
-            col_f1, col_f2 = st.columns(2)
+            df_fila_resumo = pd.DataFrame(dados_fila)
+            
+            df_fila_editado = st.data_editor(
+                df_fila_resumo,
+                column_config={
+                    "Remover?": st.column_config.CheckboxColumn("Remover?"),
+                    "ID_ITEM": None
+                },
+                disabled=["QTD REG", "ABA", "VL BUSCA", "CAMPO", "VL ANTIGO", "NOVO VALOR"],
+                use_container_width=True,
+                key="editor_fila"
+            )
+            
+            col_f1, col_f2, col_f3 = st.columns(3)
             with col_f1:
-                if st.button("🗑️ Limpar Fila", key="btn_limpar_fila"): st.session_state['fila_modificacoes'] = []; st.rerun()
+                if st.button("🗑️ Remover Selecionados", key="btn_remover_sel"):
+                    indices_para_remover = df_fila_editado[df_fila_editado["Remover?"] == True]["ID_ITEM"].tolist()
+                    if indices_para_remover:
+                        st.session_state['fila_modificacoes'] = [
+                            item for i, item in enumerate(st.session_state['fila_modificacoes']) 
+                            if i not in indices_para_remover
+                        ]
+                        st.success("Modificação(ões) selecionada(s) removida(s) da fila!")
+                        st.rerun()
+                    else:
+                        st.warning("Marque ao menos um item na coluna 'Remover?' para excluir.")
             with col_f2:
+                if st.button("🗑️ Limpar Fila Inteira", key="btn_limpar_fila"):
+                    st.session_state['fila_modificacoes'] = []
+                    st.success("Fila limpa com sucesso!")
+                    st.rerun()
+            with col_f3:
                 file_bytes = gerar_arquivo_atualizado_bytes(io.BytesIO(st.session_state["wb_data"]), header, st.session_state['fila_modificacoes'], df, sheet_name=target_sheet)
                 st.download_button("📥 Baixar Arquivo Atualizado", file_bytes, "sinale_atualizado_final.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
