@@ -17,6 +17,7 @@ if 'wb_data' not in st.session_state: st.session_state['wb_data'] = None
 if 'last_dest_name' not in st.session_state: st.session_state['last_dest_name'] = None
 if 'fila_modificacoes' not in st.session_state: st.session_state['fila_modificacoes'] = []
 if 'select_all' not in st.session_state: st.session_state['select_all'] = False
+if 'file_settings' not in st.session_state: st.session_state['file_settings'] = {}
 
 # --- FUNÇÕES DE SUPORTE ---
 def copiar_estilo_completo(origem, destino):
@@ -168,15 +169,16 @@ def titulo_estilizado(subtitulo=""):
 
 # --- MENU ---
 menu_opcao = st.sidebar.radio("Selecione a rotina:", [
-    "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO",
+    "INCLUSÃO DE TRABALHO",
     "ATUALIZAÇÕES GERAIS",
+    "PESQUISA PARA REMIÇÃO",
     "LIMPAR ARQUIVO",
     "SOMENTE TRABALHADORES ATIVOS",
     "SAIR DO SISTEMA"
 ])
 
-# --- OPÇÃO 1: ORIGINAL (NÃO MEXIDA) ---
-if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
+# --- OPÇÃO 1: INCLUSÃO DE TRABALHO (TRAVADA) ---
+if menu_opcao == "INCLUSÃO DE TRABALHO":
     titulo_estilizado("INTEGRADOR ==> DADOS GERAIS DO INTERNO >>> SINALE")
     col1, col2 = st.columns(2)
     with col1:
@@ -270,7 +272,7 @@ if menu_opcao == "ATUALIZAÇÃO DE DADOS - INCLUSÃO DE TRABALHO":
             st.success("✅ Processamento concluído com sucesso!")
             st.download_button("📥 Baixar Versão Atualizada", st.session_state["wb_data"], "sinale_atualizado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS ---
+# --- OPÇÃO 2: ATUALIZAÇÕES GERAIS (TRAVADA) ---
 elif menu_opcao == "ATUALIZAÇÕES GERAIS":
     titulo_estilizado("Atualizações Gerais")
     
@@ -432,6 +434,62 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
             with col_f3:
                 file_bytes = gerar_arquivo_atualizado_bytes(io.BytesIO(st.session_state["wb_data"]), header, st.session_state['fila_modificacoes'], df, sheet_name=target_sheet)
                 st.download_button("📥 Baixar Arquivo Atualizado", file_bytes, "sinale_atualizado_final.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+# --- OPÇÃO 3: PESQUISA PARA REMIÇÃO ---
+elif menu_opcao == "PESQUISA PARA REMIÇÃO":
+    titulo_estilizado("Pesquisa para Remição")
+    
+    st.subheader("1. Carregar Arquivos")
+    uploaded_files = st.file_uploader("Selecione um ou mais arquivos (.xlsx)", type=["xlsx"], accept_multiple_files=True, key="search_upload")
+    
+    if uploaded_files:
+        settings = {}
+        for f in uploaded_files:
+            with st.expander(f"Configurações para: {f.name}"):
+                c1, c2 = st.columns(2)
+                sheets = st.text_input(f"Abas (separadas por vírgula, máx 2) para {f.name}", value="Plan1", key=f"sheets_{f.name}")
+                header_row = st.number_input(f"Linha cabeçalho para {f.name}", value=1, min_value=1, key=f"head_{f.name}")
+                settings[f.name] = {"sheets": [s.strip() for s in sheets.split(",")], "header": header_row-1}
+        
+        st.markdown("---")
+        st.subheader("2. Parâmetros de Pesquisa")
+        search_col = st.text_input("Nome da coluna para filtrar por valor (ex: 'Status'):")
+        search_val = st.text_input("Valor a pesquisar nesta coluna (ex: 'Pendente'):")
+        name_filter = st.text_input("Filtro por NOME (nome do interno/trabalhador):")
+        
+        if st.button("🔍 Iniciar Pesquisa"):
+            all_results = []
+            
+            for f in uploaded_files:
+                f.seek(0)
+                conf = settings[f.name]
+                for sheet in conf["sheets"]:
+                    try:
+                        df_tmp = pd.read_excel(f, sheet_name=sheet, header=conf["header"])
+                        
+                        # Filtro por Nome (procura em todas as colunas se não especificado)
+                        if name_filter:
+                            df_tmp = df_tmp[df_tmp.apply(lambda row: row.astype(str).str.contains(name_filter, case=False).any(), axis=1)]
+                        
+                        # Filtro por Coluna Específica
+                        if search_col and search_val:
+                            if search_col in df_tmp.columns:
+                                df_tmp = df_tmp[df_tmp[search_col].astype(str) == str(search_val)]
+                            else:
+                                st.warning(f"Coluna '{search_col}' não encontrada na aba '{sheet}' do arquivo {f.name}")
+                        
+                        if not df_tmp.empty:
+                            df_tmp['__ORIGEM__'] = f"{f.name} ({sheet})"
+                            all_results.append(df_tmp)
+                    except Exception as e:
+                        st.error(f"Erro ao ler {f.name} - Aba {sheet}: {e}")
+            
+            if all_results:
+                final_df = pd.concat(all_results, ignore_index=True)
+                st.success(f"Foram encontrados {len(final_df)} resultados.")
+                st.dataframe(final_df, use_container_width=True)
+            else:
+                st.warning("Nenhum resultado encontrado com os critérios fornecidos.")
 
 # --- DEMAIS OPÇÕES ---
 elif menu_opcao == "LIMPAR ARQUIVO":
