@@ -484,11 +484,10 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         df_tmp = pd.read_excel(f, sheet_name=sheet, header=cfg["header_idx"])
                         target_col = cfg["col_busca"]
                         if target_col and target_col in df_tmp.columns:
-                            # --- MODIFICAÇÕES APLICADAS AQUI ---
                             df_tmp['MÊS/ANO - ABA'] = f"{mes_ano_m9} - {sheet}"
                             df_tmp['Campo Pesquisado'] = target_col
+                            df_tmp['Valor_Busca'] = df_tmp[target_col].astype(str)
                             df_tmp['Nome (Visualização)'] = df_tmp[target_col].astype(str) + f" - {sheet}"
-                            # -----------------------------------
                             all_results.append(df_tmp)
                     except Exception as e:
                         st.error(f"Erro ao ler {f.name} - Aba {sheet}: {e}")
@@ -507,24 +506,27 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.markdown("---")
         st.subheader("🔍 Filtros de Visualização e Busca")
         
-        # --- MODIFICAÇÕES APLICADAS AQUI ---
         cols_controle = ['MÊS/ANO - ABA', 'Nome (Visualização)', 'Campo Pesquisado']
-        outras_cols = [c for c in df_pesq.columns if c not in cols_controle]
+        outras_cols = [c for c in df_pesq.columns if c not in cols_controle and c != 'Valor_Busca']
         lista_colunas_full = cols_controle + outras_cols
-        # -----------------------------------
         
         cols_para_ver = st.multiselect("Selecione os campos que deseja visualizar:", options=lista_colunas_full, default=cols_controle, key="cols_ver_op3")
         
-        col_filtro, val_filtro = st.columns(2)
-        with col_filtro: filtro_col = st.selectbox("Coluna para buscar:", df_pesq.columns, key="filtro_col_op3")
-        valores_existentes = sorted([str(v) for v in df_pesq[filtro_col].dropna().unique()])
-        with val_filtro: filtro_vals = st.multiselect("Selecione o(s) valor(es) para filtrar:", valores_existentes, key="filtro_vals_op3")
+        # --- NOVO CAMPO DE BUSCA ÚNICO E SIMULTÂNEO ---
+        busca = st.text_input("🔍 Digite para pesquisar nos campos previamente escolhidos:", key="busca_texto_op3")
         
         df_view = df_pesq.copy()
-        if filtro_vals: df_view = df_view[df_view[filtro_col].astype(str).isin(filtro_vals)]
+        
+        # APLICANDO A BUSCA
+        if busca.strip():
+            df_view = df_view[df_view['Valor_Busca'].str.contains(busca.strip(), case=False, na=False)]
+            
         st.metric("Total de Registros Encontrados", len(df_view))
-        if cols_para_ver: st.dataframe(df_view[cols_para_ver], use_container_width=True)
-        else: st.info("ℹ️ Selecione ao menos um campo acima para exibir a tabela de visualização.")
+        
+        if cols_para_ver: 
+            st.dataframe(df_view[cols_para_ver], use_container_width=True)
+        else: 
+            st.info("ℹ️ Selecione ao menos um campo acima para exibir a tabela de visualização.")
 
 # --- DEMAIS OPÇÕES ---
 elif menu_opcao == "LIMPAR ARQUIVO":
