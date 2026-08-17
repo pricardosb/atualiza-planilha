@@ -396,34 +396,33 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     except:
                         cols_aba = []
                     
-                    # Definição automática inteligente das colunas padrão de acordo com a regra solicitada
-                    default_col_index = 0
+                    # Definição automática pré-preenchida da coluna padrão conforme as regras:
+                    # - COM REMUNERAÇÃO: 'NOME' ou a Coluna I (índice 8 se houver >= 9 colunas)
+                    # - SEM REMUNERAÇÃO: 'NOME DO INTERNO' ou a Coluna I (índice 8)
                     upper_sheet = sheet.upper()
+                    col_default_val = None
                     
                     if "COM REMUNERAÇÃO" in upper_sheet:
-                        # Tenta encontrar 'NOME' ou a coluna I (índice 8 se houver pelo menos 9 colunas)
                         candidatos = [c for c in cols_aba if str(c).strip().upper() == "NOME"]
                         if candidatos:
                             col_default_val = candidatos[0]
                         elif len(cols_aba) >= 9:
-                            col_default_val = cols_aba[8] # Coluna I (0-indexed = 8)
-                        elif cols_aba:
-                            col_default_val = cols_aba[0]
-                        else:
-                            col_default_val = "--- Não pesquisar nesta aba ---"
+                            col_default_val = cols_aba[8] # Coluna I
                     elif "SEM REMUNERAÇÃO" in upper_sheet:
-                        # Tenta encontrar 'NOME DO INTERNO' ou a coluna I (índice 8)
                         candidatos = [c for c in cols_aba if str(c).strip().upper() == "NOME DO INTERNO"]
                         if candidatos:
                             col_default_val = candidatos[0]
                         elif len(cols_aba) >= 9:
                             col_default_val = cols_aba[8] # Coluna I
+                    
+                    # Se não encontrou nenhuma das referências específicas acima, usa a Coluna I como fallback se existir, senão a primeira coluna
+                    if not col_default_val:
+                        if len(cols_aba) >= 9:
+                            col_default_val = cols_aba[8]
                         elif cols_aba:
                             col_default_val = cols_aba[0]
                         else:
                             col_default_val = "--- Não pesquisar nesta aba ---"
-                    else:
-                        col_default_val = cols_aba[0] if cols_aba else "--- Não pesquisar nesta aba ---"
 
                     opcoes_colunas = ["--- Não pesquisar nesta aba ---"] + cols_aba
                     try:
