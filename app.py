@@ -364,7 +364,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     titulo_estilizado("Pesquisa para Remição")
     
     st.subheader("1. Configuração de Arquivos, Abas e Campos")
-    # ADICIONADO .ods
     uploaded_files = st.file_uploader("Selecione um ou mais arquivos (.xlsx, .xls, .ods)", type=["xlsx", "xls", "ods"], accept_multiple_files=True, key="search_upload")
     
     if uploaded_files:
@@ -375,7 +374,11 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             sheets_available = xl.sheet_names
             
             with st.expander(f"📁 Configurações para: {f.name}", expanded=True):
-                selected_sheets = st.multiselect(f"Selecione até 2 abas para {f.name}", sheets_available, default=sheets_available[:2] if sheets_available else None, max_selections=2, key=f"sheets_{f.name}")
+                # Regra de seleção automática de abas: 'COM REMUNERAÇÃO' e 'SEM REMUNERAÇÃO'
+                pref_sheets = [s for s in sheets_available if any(p in s.strip().upper() for p in ["COM REMUNER", "SEM REMUNER"])]
+                default_sheets = pref_sheets if pref_sheets else (sheets_available[:2] if sheets_available else [])
+                
+                selected_sheets = st.multiselect(f"Selecione até 2 abas para {f.name}", sheets_available, default=default_sheets, max_selections=2, key=f"sheets_{f.name}")
                 
                 sheet_config = {}
                 for i, sheet in enumerate(selected_sheets):
@@ -390,8 +393,46 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     except:
                         cols_aba = []
                     
+                    # Lógica de seleção inteligente da coluna de consulta por aba
+                    sheet_upper = sheet.strip().upper()
+                    default_col = None
+                    
+                    if "COM REMUNER" in sheet_upper:
+                        # Para 'COM REMUNERAÇÃO': Procura 'NOME' ou Coluna I (índice 8)
+                        for c in cols_aba:
+                            if str(c).strip().upper() == "NOME":
+                                default_col = c
+                                break
+                        if not default_col and len(cols_aba) > 8:
+                            default_col = cols_aba[8]
+                    elif "SEM REMUNER" in sheet_upper:
+                        # Para 'SEM REMUNERAÇÃO': Procura 'NOME DO INTERNO' ou Coluna I (índice 8)
+                        for c in cols_aba:
+                            if str(c).strip().upper() == "NOME DO INTERNO":
+                                default_col = c
+                                break
+                        if not default_col and len(cols_aba) > 8:
+                            default_col = cols_aba[8]
+                    else:
+                        # Para outros arquivos / abas: Procura 'NOME' ou Coluna I
+                        for c in cols_aba:
+                            if str(c).strip().upper() == "NOME":
+                                default_col = c
+                                break
+                        if not default_col:
+                            for c in cols_aba:
+                                if "NOME" in str(c).strip().upper():
+                                    default_col = c
+                                    break
+                        if not default_col and len(cols_aba) > 8:
+                            default_col = cols_aba[8]
+                        elif not default_col and cols_aba:
+                            default_col = cols_aba[0]
+                    
                     opcoes_colunas = ["--- Não pesquisar nesta aba ---"] + cols_aba
-                    col_escolhida = st.selectbox(f"Selecione o campo (coluna) para a pesquisa na aba '{sheet}':", opcoes_colunas, key=f"col_search_{f.name}_{sheet}")
+                    default_idx = opcoes_colunas.index(default_col) if default_col in opcoes_colunas else 0
+                    
+                    col_escolhida = st.selectbox(f"Selecione o campo (coluna) para a pesquisa na aba '{sheet}':", opcoes_colunas, index=default_idx, key=f"col_search_{f.name}_{sheet}")
                     
                     sheet_config[sheet] = {
                         "header_idx": header_row - 1,
