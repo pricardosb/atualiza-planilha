@@ -60,6 +60,20 @@ def converter_valor_inteligente(val_str, dtype_original):
     try: return float(val_str.replace(',', '.'))
     except ValueError: return val_str
 
+def formatar_datas_dataframe(df_input):
+    """Remove o componente de horário das colunas de data para exibição limpa (DD/MM/AAAA)."""
+    df_out = df_input.copy()
+    for col in df_out.columns:
+        if pd.api.types.is_datetime64_any_dtype(df_out[col]):
+            df_out[col] = df_out[col].dt.strftime('%d/%m/%Y')
+        else:
+            df_out[col] = df_out[col].apply(
+                lambda v: v.strftime('%d/%m/%Y') if isinstance(v, (datetime.datetime, datetime.date, pd.Timestamp)) else (
+                    str(v).split(' ')[0] if isinstance(v, str) and (' 00:00:00' in str(v) or 'T00:00:00' in str(v)) else v
+                )
+            )
+    return df_out
+
 def calcular_pascoa(ano):
     a = ano % 19
     b = ano // 100
@@ -183,7 +197,6 @@ def extrair_mes_ano_m9(file_bytes_io, sheets_available):
         return "SEM MÊS/ANO"
 
 def obter_nome_coluna_por_letra(df, colunas_disponiveis, letra):
-    """Mapeia letra do Excel (ex: 'B') para o nome real da coluna no DataFrame se existir."""
     mapa_letras = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7, 'I': 8, 'J': 9, 
                    'K': 10, 'L': 11, 'M': 12, 'N': 13, 'O': 14, 'P': 15, 'Q': 16, 'R': 17, 'S': 18, 
                    'T': 19, 'U': 20, 'V': 21, 'W': 22, 'X': 23, 'Y': 24, 'Z': 25}
@@ -332,7 +345,9 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
         df_view = df.copy()
         if filtro_vals: df_view = df_view[df_view[filtro_col].astype(str).isin(filtro_vals)]
         st.metric("Total de Registros Encontrados", len(df_view))
-        st.dataframe(df_view[cols_para_ver], use_container_width=True)
+        
+        df_view_fmt = formatar_datas_dataframe(df_view[cols_para_ver])
+        st.dataframe(df_view_fmt, use_container_width=True, hide_index=True)
         
         st.subheader("✏️ Seleção para Atualizar")
         if 'select_all' not in st.session_state: st.session_state['select_all'] = False
@@ -399,10 +414,8 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             xl = pd.ExcelFile(io.BytesIO(f_bytes))
             sheets_available = xl.sheet_names
             
-            # Regra: Filtrar abas de Remuneração
             pref_sheets = [s for s in sheets_available if any(p in s.strip().upper() for p in ["COM REMUNER", "SEM REMUNER"])]
             
-            # Se existirem, seleciona apenas elas. Caso contrário, pega a primeira aba
             if pref_sheets:
                 default_sheets = pref_sheets
                 is_fallback = False
@@ -422,7 +435,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 for i, sheet in enumerate(selected_sheets):
                     st.markdown(f"**Aba: `{sheet}`**")
                     
-                    # Regra de Linha de Cabeçalho: 11 para COM/SEM REMUNERAÇÃO, 10 para primeira aba (fallback)
                     sheet_upper = sheet.strip().upper()
                     if any(p in sheet_upper for p in ["COM REMUNER", "SEM REMUNER"]):
                         default_header = 11
@@ -442,7 +454,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     except:
                         cols_aba = []
                     
-                    # Regra de busca automática de coluna por NOME / NOME DO INTERNO
                     default_col = None
                     for c in cols_aba:
                         c_up = str(c).strip().upper()
@@ -520,7 +531,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             
                             df_tmp['MÊS/ANO - ABA'] = f"{mes_ano_m9} - {sheet}"
                             df_tmp['Aba Original'] = sheet
-                            df_tmp['Arquivo Original'] = f.name
                             df_tmp['Campo Pesquisado'] = target_col
                             
                             val_nome = df_tmp[target_col].astype(str).str.strip()
@@ -576,22 +586,27 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.metric("Total de Registros Encontrados", len(df_view))
         
         if not df_view.empty:
-            for (arq, aba), df_grupo in df_view.groupby(['Arquivo Original', 'Aba Original'], sort=False):
-                ordem_str = df_grupo['Ordem_Colunas'].dropna().iloc[0] if not df_grupo['Ordem_Colunas'].dropna().empty else ""
+            # Agrupa diretamente por MÊS/ANO - ABA (sem exibir nome de arquivo no título)
+            for aba_info, df_grupo in df_view.groupby('MÊS/ANO - ABA', sort=False):
+                # Formatação para ocultar componente de horas de todas as colunas de data
+                df_display = formatar_datas_dataframe(df_grupo)
+                
+                ordem_str = df_display['Ordem_Colunas'].dropna().iloc[0] if not df_display['Ordem_Colunas'].dropna().empty else ""
                 colunas_dinamicas = ordem_str.split("|") if ordem_str else []
                 
                 colunas_finais = ['MÊS/ANO - ABA']
                 for c in colunas_dinamicas:
-                    if c in df_grupo.columns and c not in colunas_finais:
+                    if c in df_display.columns and c not in colunas_finais:
                         colunas_finais.append(c)
                 
                 if len(colunas_finais) == 1:
-                    for c in df_grupo.columns:
-                        if c not in ['MÊS/ANO - ABA', 'Aba Original', 'Arquivo Original', 'Campo Pesquisado', 'Nome (Visualização)', 'NOME_LIMPO', 'Ordem_Colunas']:
+                    for c in df_display.columns:
+                        if c not in ['MÊS/ANO - ABA', 'Aba Original', 'Campo Pesquisado', 'Nome (Visualização)', 'NOME_LIMPO', 'Ordem_Colunas']:
                             colunas_finais.append(c)
                 
-                st.markdown(f"#### 📁 Arquivo: `{arq}` | Aba: `{aba}`")
-                st.dataframe(df_grupo[colunas_finais], use_container_width=True)
+                st.markdown(f"#### 📅 `{aba_info}`")
+                # Ajustado para largura total e ocultar a coluna padrão de índice
+                st.dataframe(df_display[colunas_finais], use_container_width=True, hide_index=True)
         else:
             st.info("ℹ️ Nenhum registro selecionado ou encontrado na pesquisa.")
 
