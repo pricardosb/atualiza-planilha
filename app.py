@@ -549,20 +549,17 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             df_tmp['Aba Original'] = sheet
                             df_tmp['Campo Pesquisado'] = target_col
                             
-                            val_nome = df_tmp[target_col].astype(str).str.strip()
-                            df_tmp['Nome (Visualização)'] = val_nome + " - " + sheet
-                            df_tmp['NOME_LIMPO'] = val_nome.str.upper()
+                            val_nome = df_tmp[target_col].astype(str).str.strip().str.upper()
+                            df_tmp['Nome (Visualização)'] = val_nome
+                            df_tmp['NOME_LIMPO'] = val_nome
                             
                             df_tmp = df_tmp[~df_tmp['NOME_LIMPO'].isin(['', 'NAN', 'NONE', '0', 'NAT', 'NC', 'N/C'])].copy()
                             
                             aba_upper = sheet.strip().upper()
                             is_com_remuner = "COM REMUNER" in aba_upper
                             is_sem_remuner = "SEM REMUNER" in aba_upper
-                            col_F_nome = obter_nome_coluna_por_letra(df_tmp, colunas_originais, 'F')
                             
                             def extrair_dados_e_categoria(row):
-                                val_f = str(row[col_F_nome]).strip().upper() if col_F_nome and col_F_nome in row and pd.notna(row[col_F_nome]) else ""
-                                
                                 if is_com_remuner:
                                     cat = "COM REMUNERAÇÃO"
                                     letras = ['B', 'I', 'J', 'T', 'U', 'V', 'W']
@@ -570,15 +567,8 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     cat = "SEM REMUNERAÇÃO"
                                     letras = ['I', 'B', 'W', 'R', 'S', 'T', 'U']
                                 else:
-                                    if val_f == 'SIM':
-                                        cat = "COM REMUNERAÇÃO"
-                                        letras = ['J', 'C', 'X', 'S', 'T', 'U', 'V']
-                                    elif val_f in ['NÃO', 'NAO']:
-                                        cat = "SEM REMUNERAÇÃO"
-                                        letras = ['I', 'B', 'W', 'R', 'S', 'T', 'U']
-                                    else:
-                                        cat = "OUTRAS ABAS"
-                                        letras = ['J', 'C', 'X', 'R', 'S', 'T', 'U', 'V', 'W']
+                                    cat = "OUTRAS ABAS"
+                                    letras = ['B', 'I', 'J', 'T', 'U', 'V', 'W']
                                 
                                 row_vals = {'Categoria_Aba': cat}
                                 for idx_p, let in enumerate(letras):
