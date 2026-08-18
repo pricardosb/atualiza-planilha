@@ -210,7 +210,6 @@ def gerar_config_largura_colunas(df_subset, colunas):
     config = {}
     for col in colunas:
         if col in df_subset.columns:
-            # Calcula o tamanho máximo dos dados na coluna (ignora o tamanho do título)
             max_len = df_subset[col].astype(str).str.len().max() if not df_subset[col].empty else 10
             if pd.isna(max_len) or max_len <= 12:
                 config[col] = st.column_config.Column(width="small")
@@ -560,7 +559,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             elif "SEM REMUNER" in aba_upper:
                                 letras_desejadas = ['I', 'B', 'W', 'R', 'S', 'T', 'U']
                             else:
-                                letras_desejadas = ['J', 'C', 'X', 'S', 'T', 'U', 'V']
+                                letras_desejadas = ['J', 'C', 'X', 'F', 'S', 'T', 'U', 'V']
                             
                             nomes_colunas_exibir = []
                             for let in letras_desejadas:
@@ -612,7 +611,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             
             df_view['Categoria_Aba'] = df_view['Aba Original'].apply(categorizar_aba)
             
-            # Formatação de datas para ocultar horários
             df_display_all = formatar_datas_dataframe(df_view)
             
             grupos_categorias = [
@@ -641,7 +639,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             if c not in ['MÊS/ANO - ABA', 'Aba Original', 'Campo Pesquisado', 'Nome (Visualização)', 'NOME_LIMPO', 'Ordem_Colunas', 'Categoria_Aba']:
                                 colunas_finais.append(c)
                     
-                    # Gerador dinâmico de largura ajustado EXCLUSIVAMENTE pelo CONTEÚDO (evita que títulos longos estiquem a coluna)
                     col_config_conteudo = gerar_config_largura_colunas(df_grupo, colunas_finais)
                     
                     st.markdown(f"### {titulo_grupo} ({len(df_grupo)} registro(s))")
