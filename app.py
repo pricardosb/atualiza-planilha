@@ -205,6 +205,21 @@ def obter_nome_coluna_por_letra(df, colunas_disponiveis, letra):
         return colunas_disponiveis[idx]
     return None
 
+def gerar_config_largura_colunas(df_subset, colunas):
+    """Gera configuração de largura de colunas baseada exclusivamente no tamanho do CONTEÚDO."""
+    config = {}
+    for col in colunas:
+        if col in df_subset.columns:
+            # Calcula o tamanho máximo dos dados na coluna (ignora o tamanho do título)
+            max_len = df_subset[col].astype(str).str.len().max() if not df_subset[col].empty else 10
+            if pd.isna(max_len) or max_len <= 12:
+                config[col] = st.column_config.Column(width="small")
+            elif max_len <= 35:
+                config[col] = st.column_config.Column(width="medium")
+            else:
+                config[col] = st.column_config.Column(width="large")
+    return config
+
 # --- MENU ---
 menu_opcao = st.sidebar.radio("Selecione a rotina:", [
     "INCLUSÃO DE TRABALHO",
@@ -586,7 +601,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.metric("Total de Registros Encontrados", len(df_view))
         
         if not df_view.empty:
-            # Função para categorizar as abas em 3 grupos
             def categorizar_aba(aba_name):
                 aba_upper = str(aba_name).strip().upper()
                 if "COM REMUNER" in aba_upper:
@@ -611,7 +625,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 df_grupo = df_display_all[df_display_all['Categoria_Aba'] == cat_key]
                 
                 if not df_grupo.empty:
-                    # Mapeia colunas dinâmicas ordenadas do grupo
                     cols_ordem = []
                     for seq in df_grupo['Ordem_Colunas'].dropna().unique():
                         for c in seq.split('|'):
@@ -628,8 +641,16 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             if c not in ['MÊS/ANO - ABA', 'Aba Original', 'Campo Pesquisado', 'Nome (Visualização)', 'NOME_LIMPO', 'Ordem_Colunas', 'Categoria_Aba']:
                                 colunas_finais.append(c)
                     
+                    # Gerador dinâmico de largura ajustado EXCLUSIVAMENTE pelo CONTEÚDO (evita que títulos longos estiquem a coluna)
+                    col_config_conteudo = gerar_config_largura_colunas(df_grupo, colunas_finais)
+                    
                     st.markdown(f"### {titulo_grupo} ({len(df_grupo)} registro(s))")
-                    st.dataframe(df_grupo[colunas_finais], use_container_width=True, hide_index=True)
+                    st.dataframe(
+                        df_grupo[colunas_finais], 
+                        column_config=col_config_conteudo,
+                        use_container_width=True, 
+                        hide_index=True
+                    )
                     st.markdown("---")
         else:
             st.info("ℹ️ Nenhum registro selecionado ou encontrado na pesquisa.")
