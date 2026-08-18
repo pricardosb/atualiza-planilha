@@ -162,7 +162,7 @@ def gerar_arquivo_atualizado_bytes(source_input, header, fila, df_original, shee
 def titulo_estilizado(subtitulo=""):
     st.markdown(f"<div style='text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border-radius: 12px; margin-bottom: 1.5rem;'><h1>⚡ SINALE WEB</h1><p>{subtitulo}</p></div>", unsafe_allow_html=True)
 
-def extrair_mes_ano_m9(file_bytes, sheets_available):
+def extrair_mes_ano_m9(file_bytes_io, sheets_available):
     try:
         target_sheet = None
         for s in sheets_available:
@@ -172,8 +172,8 @@ def extrair_mes_ano_m9(file_bytes, sheets_available):
         if not target_sheet and sheets_available:
             target_sheet = sheets_available[0]
             
-        file_bytes.seek(0)
-        df_cell = pd.read_excel(file_bytes, sheet_name=target_sheet, header=None, nrows=9)
+        file_bytes_io.seek(0)
+        df_cell = pd.read_excel(file_bytes_io, sheet_name=target_sheet, header=None, nrows=9)
         val = df_cell.iloc[8, 12]
         
         if pd.isna(val) or str(val).strip() == "": return "SEM MÊS/ANO"
@@ -394,33 +394,28 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     if uploaded_files:
         settings = {}
         for f in uploaded_files:
-            f.seek(0)
-            xl = pd.ExcelFile(f)
+            f_bytes = f.getvalue()
+            xl = pd.ExcelFile(io.BytesIO(f_bytes))
             sheets_available = xl.sheet_names
             
             with st.expander(f"📁 Configurações para: {f.name}", expanded=True):
                 pref_sheets = [s for s in sheets_available if any(p in s.strip().upper() for p in ["COM REMUNER", "SEM REMUNER"])]
-                if pref_sheets:
-                    default_sheets = pref_sheets
-                else:
-                    default_sheets = [sheets_available[0]] if sheets_available else []
+                default_sheets = pref_sheets if pref_sheets else ([sheets_available[0]] if sheets_available else [])
                 
                 selected_sheets = st.multiselect(f"Selecione aba(s) para {f.name}", sheets_available, default=default_sheets, max_selections=2, key=f"sheets_{f.name}")
                 
                 sheet_config = {}
                 for i, sheet in enumerate(selected_sheets):
                     st.markdown(f"**Aba: `{sheet}`**")
-                    default_header = 10 # <-- CORRIGIDO PARA PADRÃO 10
+                    default_header = 10
                     header_row = st.number_input(f"Linha do cabeçalho para aba '{sheet}'", value=default_header, min_value=1, key=f"head_{f.name}_{sheet}")
                     
                     try:
-                        f.seek(0)
-                        df_preview = pd.read_excel(f, sheet_name=sheet, header=header_row-1, nrows=0)
-                        cols_aba = list(df_preview.columns)
+                        df_preview = pd.read_excel(io.BytesIO(f_bytes), sheet_name=sheet, header=header_row-1, nrows=0)
+                        cols_aba = [str(c).strip() for c in df_preview.columns]
                     except:
                         cols_aba = []
                     
-                    # Prioriza rigidamente NOME DO INTERNO como padrão solicitado
                     default_col = None
                     for c in cols_aba:
                         if str(c).strip().upper() == "NOME DO INTERNO": default_col = c; break
@@ -449,26 +444,51 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         if st.button("🔍 Carregar e Consolidar Dados para Pesquisa", key="btn_consolidar_op3"):
             all_results = []
             for f in uploaded_files:
-                f.seek(0)
-                xl = pd.ExcelFile(f)
-                mes_ano_m9 = extrair_mes_ano_m9(f, xl.sheet_names)
+                f_bytes = f.getvalue()
+                xl = pd.ExcelFile(io.BytesIO(f_bytes))
+                mes_ano_m9 = extrair_mes_ano_m9(io.BytesIO(f_bytes), xl.sheet_names)
                 
                 file_cfg = settings.get(f.name, {})
                 for sheet, cfg in file_cfg.items():
                     try:
-                        f.seek(0)
-                        df_tmp = pd.read_excel(f, sheet_name=sheet, header=cfg["header_idx"])
-                        target_col = cfg["col_busca"]
+                        df_tmp = pd.read_excel(io.BytesIO(f_bytes), sheet_name=sheet, header=cfg["header_idx"])
+                        df_tmp.columns = [str(c).strip() for c in df_tmp.columns]
+                        df_tmp.columns = deduplicar_colunas(df_tmp.columns)
+                        
+                        # Resolver coluna de busca de forma inteligente para garantir leitura em todos os arquivos
+                        target_col = None
+                        col_pedida = cfg.get("col_busca")
+                        if col_pedida:
+                            for c in df_tmp.columns:
+                                if str(c).strip().upper() == str(col_pedida).strip().upper():
+                                    target_col = c; break
+                        if not target_col:
+                            for c in df_tmp.columns:
+                                if "NOME DO INTERNO" in str(c).strip().upper():
+                                    target_col = c; break
+                        if not target_col:
+                            for c in df_tmp.columns:
+                                if "NOME" in str(c).strip().upper():
+                                    target_col = c; break
+                        if not target_col and len(df_tmp.columns) > 8:
+                            target_col = df_tmp.columns[8]
+                        elif not target_col and len(df_tmp.columns) > 0:
+                            target_col = df_tmp.columns[0]
+                        
                         if target_col and target_col in df_tmp.columns:
                             colunas_originais = list(df_tmp.columns)
                             
                             df_tmp['MÊS/ANO - ABA'] = f"{mes_ano_m9} - {sheet}"
                             df_tmp['Aba Original'] = sheet
                             df_tmp['Campo Pesquisado'] = target_col
-                            df_tmp['Valor_Busca'] = df_tmp[target_col].astype(str)
-                            df_tmp['Nome (Visualização)'] = df_tmp[target_col].astype(str) + f" - {sheet}"
                             
-                            # --- MONTAGEM DA ORDEM ANTES DA CONCATENAÇÃO (SOLUÇÃO!) ---
+                            # Nome limpo para pesquisa universal entre todos os arquivos
+                            df_tmp['NOME_PESQUISA_LIMPO'] = df_tmp[target_col].astype(str).str.strip().str.upper()
+                            
+                            # Filtrar linhas totalmente vazias ou sem nome válido
+                            df_tmp = df_tmp[~df_tmp['NOME_PESQUISA_LIMPO'].isin(['', 'NAN', 'NONE', '0', 'NAT', 'NC', 'N/C'])].copy()
+                            
+                            # Regras de colunas por aba
                             aba_upper = sheet.strip().upper()
                             if "COM REMUNER" in aba_upper:
                                 letras_desejadas = ['B', 'I', 'J', 'T', 'U', 'V', 'W']
@@ -483,10 +503,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                 if col_nome:
                                     nomes_colunas_exibir.append(str(col_nome))
                             
-                            # Gravamos a ordem exata das colunas numa coluna invisível 
-                            # para o pandas não bagunçar na hora de juntar os arquivos
                             df_tmp['Ordem_Colunas'] = "|".join(nomes_colunas_exibir)
-                            
                             all_results.append(df_tmp)
                     except Exception as e:
                         st.error(f"Erro ao ler {f.name} - Aba {sheet}: {e}")
@@ -505,7 +522,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.markdown("---")
         st.subheader("🔍 Filtros de Visualização e Busca")
         
-        nomes_disponiveis = sorted(df_pesq['Nome (Visualização)'].dropna().unique())
+        nomes_disponiveis = sorted(df_pesq['NOME_PESQUISA_LIMPO'].dropna().unique())
         nomes_selecionados = st.multiselect(
             "🔍 Digite para pesquisar e selecione o(s) nome(s):",
             options=nomes_disponiveis,
@@ -514,7 +531,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         
         df_view = df_pesq.copy()
         if nomes_selecionados:
-            df_view = df_view[df_view['Nome (Visualização)'].isin(nomes_selecionados)]
+            df_view = df_view[df_view['NOME_PESQUISA_LIMPO'].isin(nomes_selecionados)]
             
         st.metric("Total de Registros Encontrados", len(df_view))
         
@@ -522,14 +539,19 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             for aba in df_view['Aba Original'].unique():
                 df_aba_temp = df_view[df_view['Aba Original'] == aba].copy()
                 
-                # --- RECUPERANDO A ORDEM GRAVADA ANTERIORMENTE ---
-                ordem_str = df_aba_temp['Ordem_Colunas'].iloc[0]
-                colunas_dinamicas = ordem_str.split("|") if pd.notna(ordem_str) and ordem_str else []
+                # Recupera as colunas solicitadas na ordem gravada
+                ordem_str = df_aba_temp['Ordem_Colunas'].dropna().iloc[0] if not df_aba_temp['Ordem_Colunas'].dropna().empty else ""
+                colunas_dinamicas = ordem_str.split("|") if ordem_str else []
                 
                 colunas_finais = ['MÊS/ANO - ABA']
                 for c in colunas_dinamicas:
                     if c in df_aba_temp.columns and c not in colunas_finais:
                         colunas_finais.append(c)
+                
+                if len(colunas_finais) == 1:
+                    for c in df_aba_temp.columns:
+                        if c not in ['MÊS/ANO - ABA', 'Aba Original', 'Campo Pesquisado', 'NOME_PESQUISA_LIMPO', 'Ordem_Colunas']:
+                            colunas_finais.append(c)
                 
                 st.markdown(f"#### 📁 Resultados na Aba: `{aba}`")
                 st.dataframe(df_aba_temp[colunas_finais], use_container_width=True)
