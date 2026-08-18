@@ -61,15 +61,17 @@ def converter_valor_inteligente(val_str, dtype_original):
     except ValueError: return val_str
 
 def formatar_datas_dataframe(df_input):
-    """Remove o componente de horário das colunas de data para exibição limpa (DD/MM/AAAA)."""
+    """Remove o componente de horário das colunas de data para exibição limpa (DD/MM/AAAA) tratando valores nulos (NaT)."""
     df_out = df_input.copy()
     for col in df_out.columns:
         if pd.api.types.is_datetime64_any_dtype(df_out[col]):
-            df_out[col] = df_out[col].dt.strftime('%d/%m/%Y')
+            df_out[col] = df_out[col].dt.strftime('%d/%m/%Y').fillna("")
         else:
             df_out[col] = df_out[col].apply(
-                lambda v: v.strftime('%d/%m/%Y') if isinstance(v, (datetime.datetime, datetime.date, pd.Timestamp)) else (
-                    str(v).split(' ')[0] if isinstance(v, str) and (' 00:00:00' in str(v) or 'T00:00:00' in str(v)) else v
+                lambda v: "" if pd.isna(v) else (
+                    v.strftime('%d/%m/%Y') if isinstance(v, (datetime.datetime, datetime.date, pd.Timestamp)) else (
+                        str(v).split(' ')[0] if isinstance(v, str) and (' 00:00:00' in str(v) or 'T00:00:00' in str(v)) else v
+                    )
                 )
             )
     return df_out
@@ -558,7 +560,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             is_sem_remuner = "SEM REMUNER" in aba_upper
                             col_F_nome = obter_nome_coluna_por_letra(df_tmp, colunas_originais, 'F')
                             
-                            # --- MAPEAMENTO E EXTRAÇÃO POSICIONAL LINHA A LINHA ---
                             def extrair_dados_e_categoria(row):
                                 val_f = str(row[col_F_nome]).strip().upper() if col_F_nome and col_F_nome in row and pd.notna(row[col_F_nome]) else ""
                                 
@@ -571,14 +572,12 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                 else:
                                     if val_f == 'SIM':
                                         cat = "COM REMUNERAÇÃO"
-                                        # B=J; I=C; J=X; T=S; U=T; V=U; W=V
                                         letras = ['J', 'C', 'X', 'S', 'T', 'U', 'V']
                                     elif val_f in ['NÃO', 'NAO']:
                                         cat = "SEM REMUNERAÇÃO"
                                         letras = ['I', 'B', 'W', 'R', 'S', 'T', 'U']
                                     else:
                                         cat = "OUTRAS ABAS"
-                                        # Coluna F é omitida da exibição
                                         letras = ['J', 'C', 'X', 'R', 'S', 'T', 'U', 'V', 'W']
                                 
                                 row_vals = {'Categoria_Aba': cat}
@@ -637,11 +636,9 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 df_grupo = df_display_all[df_display_all['Categoria_Aba'] == cat_key]
                 
                 if not df_grupo.empty:
-                    # Identifica e ordena as colunas posicionais (POS_0, POS_1, ...)
                     pos_cols = [c for c in df_grupo.columns if str(c).startswith("POS_")]
                     pos_cols.sort(key=lambda x: int(x.split("_")[1]))
                     
-                    # Constrói o mapa de renomeação uniforme para os cabeçalhos das colunas
                     rename_map = {}
                     for pos_col in pos_cols:
                         idx_num = pos_col.split("_")[1]
