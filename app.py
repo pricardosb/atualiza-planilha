@@ -410,7 +410,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 sheet_config = {}
                 for i, sheet in enumerate(selected_sheets):
                     st.markdown(f"**Aba: `{sheet}`**")
-                    default_header = 11 if i == 0 else 10
+                    default_header = 10 # <-- CORRIGIDO PARA PADRÃO 10
                     header_row = st.number_input(f"Linha do cabeçalho para aba '{sheet}'", value=default_header, min_value=1, key=f"head_{f.name}_{sheet}")
                     
                     try:
@@ -420,25 +420,18 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     except:
                         cols_aba = []
                     
-                    sheet_upper = sheet.strip().upper()
+                    # Prioriza rigidamente NOME DO INTERNO como padrão solicitado
                     default_col = None
-                    
-                    if "COM REMUNER" in sheet_upper:
+                    for c in cols_aba:
+                        if str(c).strip().upper() == "NOME DO INTERNO": default_col = c; break
+                    if not default_col:
                         for c in cols_aba:
                             if str(c).strip().upper() == "NOME": default_col = c; break
-                        if not default_col and len(cols_aba) > 8: default_col = cols_aba[8]
-                    elif "SEM REMUNER" in sheet_upper:
+                    if not default_col:
                         for c in cols_aba:
-                            if str(c).strip().upper() == "NOME DO INTERNO": default_col = c; break
-                        if not default_col and len(cols_aba) > 8: default_col = cols_aba[8]
-                    else:
-                        for c in cols_aba:
-                            if str(c).strip().upper() == "NOME": default_col = c; break
-                        if not default_col:
-                            for c in cols_aba:
-                                if "NOME" in str(c).strip().upper(): default_col = c; break
-                        if not default_col and len(cols_aba) > 8: default_col = cols_aba[8]
-                        elif not default_col and cols_aba: default_col = cols_aba[0]
+                            if "NOME" in str(c).strip().upper(): default_col = c; break
+                    if not default_col and len(cols_aba) > 8: default_col = cols_aba[8]
+                    elif not default_col and cols_aba: default_col = cols_aba[0]
                     
                     opcoes_colunas = ["--- Não pesquisar nesta aba ---"] + cols_aba
                     default_idx = opcoes_colunas.index(default_col) if default_col in opcoes_colunas else 0
@@ -467,11 +460,33 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         df_tmp = pd.read_excel(f, sheet_name=sheet, header=cfg["header_idx"])
                         target_col = cfg["col_busca"]
                         if target_col and target_col in df_tmp.columns:
+                            colunas_originais = list(df_tmp.columns)
+                            
                             df_tmp['MÊS/ANO - ABA'] = f"{mes_ano_m9} - {sheet}"
                             df_tmp['Aba Original'] = sheet
                             df_tmp['Campo Pesquisado'] = target_col
                             df_tmp['Valor_Busca'] = df_tmp[target_col].astype(str)
                             df_tmp['Nome (Visualização)'] = df_tmp[target_col].astype(str) + f" - {sheet}"
+                            
+                            # --- MONTAGEM DA ORDEM ANTES DA CONCATENAÇÃO (SOLUÇÃO!) ---
+                            aba_upper = sheet.strip().upper()
+                            if "COM REMUNER" in aba_upper:
+                                letras_desejadas = ['B', 'I', 'J', 'T', 'U', 'V', 'W']
+                            elif "SEM REMUNER" in aba_upper:
+                                letras_desejadas = ['I', 'B', 'W', 'R', 'S', 'T', 'U']
+                            else:
+                                letras_desejadas = ['J', 'C', 'X', 'S', 'T', 'U', 'V']
+                            
+                            nomes_colunas_exibir = []
+                            for let in letras_desejadas:
+                                col_nome = obter_nome_coluna_por_letra(df_tmp, colunas_originais, let)
+                                if col_nome:
+                                    nomes_colunas_exibir.append(str(col_nome))
+                            
+                            # Gravamos a ordem exata das colunas numa coluna invisível 
+                            # para o pandas não bagunçar na hora de juntar os arquivos
+                            df_tmp['Ordem_Colunas'] = "|".join(nomes_colunas_exibir)
+                            
                             all_results.append(df_tmp)
                     except Exception as e:
                         st.error(f"Erro ao ler {f.name} - Aba {sheet}: {e}")
@@ -503,26 +518,18 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             
         st.metric("Total de Registros Encontrados", len(df_view))
         
-        # Exibição automática das colunas de acordo com a aba de origem
         if not df_view.empty:
             for aba in df_view['Aba Original'].unique():
                 df_aba_temp = df_view[df_view['Aba Original'] == aba].copy()
-                colunas_originais = [c for c in df_aba_temp.columns if c not in ['MÊS/ANO - ABA', 'Aba Original', 'Campo Pesquisado', 'Valor_Busca', 'Nome (Visualização)']]
                 
-                # Definir regras de letras solicitadas
-                aba_upper = aba.strip().upper()
-                if "COM REMUNER" in aba_upper:
-                    letras_desejadas = ['B', 'I', 'J', 'T', 'U', 'V', 'W']
-                elif "SEM REMUNER" in aba_upper:
-                    letras_desejadas = ['I', 'B', 'W', 'R', 'S', 'T', 'U']
-                else:
-                    letras_desejadas = ['J', 'C', 'X', 'S', 'T', 'U', 'V']
+                # --- RECUPERANDO A ORDEM GRAVADA ANTERIORMENTE ---
+                ordem_str = df_aba_temp['Ordem_Colunas'].iloc[0]
+                colunas_dinamicas = ordem_str.split("|") if pd.notna(ordem_str) and ordem_str else []
                 
                 colunas_finais = ['MÊS/ANO - ABA']
-                for let in letras_desejadas:
-                    col_nome = obter_nome_coluna_por_letra(df_aba_temp, colunas_originais, let)
-                    if col_nome and col_nome not in colunas_finais:
-                        colunas_finais.append(col_nome)
+                for c in colunas_dinamicas:
+                    if c in df_aba_temp.columns and c not in colunas_finais:
+                        colunas_finais.append(c)
                 
                 st.markdown(f"#### 📁 Resultados na Aba: `{aba}`")
                 st.dataframe(df_aba_temp[colunas_finais], use_container_width=True)
