@@ -713,21 +713,26 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             aba_upper = sheet.strip().upper()
                             is_com_remuner = "COM REMUNER" in aba_upper
                             is_sem_remuner = "SEM REMUNER" in aba_upper
+                            col_f = obter_nome_coluna_por_letra(df_tmp, colunas_originais, 'F')
 
                             def extrair_dados_e_categoria(row):
-                                # 1. Aba 'COM REMUNER'
+                                # 1. Aba 'COM REMUNER' (Exibe B, I, J, T, U, V, W)
                                 if is_com_remuner:
                                     cat = "COM REMUNERAÇÃO"
                                     letras = ["B", "I", "J", "T", "U", "V", "W"]
 
-                                # 2. Aba 'SEM REMUNER'
+                                # 2. Aba 'SEM REMUNER' (Exibe I, B, W, R, S, T, U)
                                 elif is_sem_remuner:
                                     cat = "SEM REMUNERAÇÃO"
                                     letras = ["I", "B", "W", "R", "S", "T", "U"]
 
-                                # 3. OUTRAS ABAS (Sempre J, C, X, S, T, U, V)
+                                # 3. OUTRAS ABAS -> Exibe SEMPRE J, C, X, S, T, U, V
+                                # O valor da Coluna F apenas define o local de exibição (COM ou SEM REMUNERAÇÃO)
                                 else:
-                                    cat = "OUTRAS ABAS"
+                                    val_f = row[col_f] if (col_f and col_f in row) else None
+                                    is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
+
+                                    cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERAÇÃO"
                                     letras = ["J", "C", "X", "S", "T", "U", "V"]
 
                                 row_vals = {"Categoria_Aba": cat}
@@ -783,8 +788,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
             grupos_categorias = [
                 ("🟢 COM REMUNERAÇÃO", "COM REMUNERAÇÃO"),
-                ("🟡 SEM REMUNERAÇÃO", "SEM REMUNERAÇÃO"),
-                ("🔵 OUTRAS ABAS", "OUTRAS ABAS")
+                ("🟡 SEM REMUNERAÇÃO", "SEM REMUNERAÇÃO")
             ]
 
             for titulo_grupo, cat_key in grupos_categorias:
