@@ -8,6 +8,7 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import Font
 import streamlit as st
+import streamlit.components.v1 as components
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="SINALE WEB", layout="wide")
@@ -867,6 +868,24 @@ elif menu_opcao == 'PESQUISA PARA REMIÇÃO':
 
                 settings[file_key] = sheet_config
 
+        # Autoscroll automático para o botão de carregar dados após upload
+        components.html(
+            """
+            <script>
+                setTimeout(function() {
+                    var buttons = window.parent.document.querySelectorAll('button');
+                    for (var i = 0; i < buttons.length; i++) {
+                        if (buttons[i].innerText.includes("Carregar e Consolidar Dados")) {
+                            buttons[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            break;
+                        }
+                    }
+                }, 300);
+            </script>
+            """,
+            height=0,
+        )
+
         if st.button(
             '🔍 Carregar e Consolidar Dados para Pesquisa',
             key='btn_consolidar_op3',
@@ -967,33 +986,33 @@ elif menu_opcao == 'PESQUISA PARA REMIÇÃO':
                                 # =========================================================================
                                 elif is_sem_remuner:
                                     cat = 'SEM REMUNERAÇÃO'
-                                    letras = ['J', 'C', 'X', 'S', 'T', 'U', 'V']
+                                    letras = ['I', 'B', 'W', 'R', 'S', 'T', 'U']
 
                                 # =========================================================================
-                                # ABA ÚNICA / GENÉRICA (Coluna F determina o grupo, layout usa J C X S T U V)
+                                # ABA ÚNICA / GENÉRICA (Coluna F determina o grupo)
                                 # =========================================================================
                                 else:
                                     if val_f == 'SIM':
                                         cat = 'COM REMUNERAÇÃO'
                                         letras = [
+                                            'B',
+                                            'I',
                                             'J',
-                                            'C',
-                                            'X',
-                                            'S',
                                             'T',
                                             'U',
                                             'V',
+                                            'W',
                                         ]
                                     else:
                                         cat = 'SEM REMUNERAÇÃO'
                                         letras = [
-                                            'J',
-                                            'C',
-                                            'X',
+                                            'I',
+                                            'B',
+                                            'W',
+                                            'R',
                                             'S',
                                             'T',
                                             'U',
-                                            'V',
                                         ]
 
                                 row_vals = {'Categoria_Aba': cat}
