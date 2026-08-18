@@ -412,7 +412,7 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                     st.session_state['fila_modificacoes'] = [item for i, item in enumerate(st.session_state['fila_modificacoes']) if i not in indices]
                     st.rerun()
             with col_f3:
-                file_bytes = gerar_arquivo_atualizado_bytes(io.BytesIO(st.session_state["wb_data"]), header, st.session_state['fila_modificacoes'], df, sheet_name=target_sheet)
+                file_bytes = gerar_arquivo_atualizado_bytes(st.session_state["wb_data"], header, st.session_state['fila_modificacoes'], df, sheet_name=target_sheet)
                 st.download_button("📥 Baixar Arquivo Atualizado", file_bytes, "sinale_atualizado_final.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # --- OPÇÃO 3: PESQUISA PARA REMIÇÃO ---
@@ -550,7 +550,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             df_tmp['Campo Pesquisado'] = target_col
                             
                             val_nome = df_tmp[target_col].astype(str).str.strip()
-                            df_tmp['Nome (Visualização)'] = val_nome + " - " + sheet
+                            df_tmp['Nome (Visualização)'] = val_nome  # Exibe apenas o NOME do interno
                             df_tmp['NOME_LIMPO'] = val_nome.str.upper()
                             
                             df_tmp = df_tmp[~df_tmp['NOME_LIMPO'].isin(['', 'NAN', 'NONE', '0', 'NAT', 'NC', 'N/C'])].copy()
@@ -558,24 +558,24 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             aba_upper = sheet.strip().upper()
                             is_com_remuner = "COM REMUNER" in aba_upper
                             is_sem_remuner = "SEM REMUNER" in aba_upper
-                            col_F_nome = obter_nome_coluna_por_letra(df_tmp, colunas_originais, 'F')
                             
                             def extrair_dados_e_categoria(row):
-                                val_f = str(row[col_F_nome]).strip().upper() if col_F_nome and col_F_nome in row and pd.notna(row[col_F_nome]) else ""
-                                
                                 if is_com_remuner:
                                     cat = "COM REMUNERAÇÃO"
                                     letras = ['B', 'I', 'J', 'T', 'U', 'V', 'W']
                                 elif is_sem_remuner:
                                     cat = "SEM REMUNERAÇÃO"
-                                    letras = ['I', 'B', 'W', 'R', 'S', 'T', 'U']
+                                    # Mapeamento ajustado para SEM REMUNERAÇÃO: I=J, B=C, W=X, R=S, S=T, T=U, U=V
+                                    letras = ['J', 'C', 'X', 'S', 'T', 'U', 'V']
                                 else:
+                                    col_F_nome = obter_nome_coluna_por_letra(df_tmp, colunas_originais, 'F')
+                                    val_f = str(row[col_F_nome]).strip().upper() if col_F_nome and col_F_nome in row and pd.notna(row[col_F_nome]) else ""
                                     if val_f == 'SIM':
                                         cat = "COM REMUNERAÇÃO"
-                                        letras = ['J', 'C', 'X', 'S', 'T', 'U', 'V']
+                                        letras = ['B', 'I', 'J', 'T', 'U', 'V', 'W']
                                     elif val_f in ['NÃO', 'NAO']:
                                         cat = "SEM REMUNERAÇÃO"
-                                        letras = ['I', 'B', 'W', 'R', 'S', 'T', 'U']
+                                        letras = ['J', 'C', 'X', 'S', 'T', 'U', 'V']
                                     else:
                                         cat = "OUTRAS ABAS"
                                         letras = ['J', 'C', 'X', 'R', 'S', 'T', 'U', 'V', 'W']
@@ -674,10 +674,65 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         else:
             st.info("ℹ️ Nenhum registro selecionado ou encontrado na pesquisa.")
 
-# --- DEMAIS OPÇÕES ---
+# --- OPÇÃO 4: LIMPAR ARQUIVO ---
 elif menu_opcao == "LIMPAR ARQUIVO":
-    if st.button("🗑️ Limpar Tudo"): st.session_state.clear(); st.rerun()
+    titulo_estilizado("Limpar Memória do Sistema")
+    st.warning("⚠️ Esta ação irá apagar todos os dados e arquivos mantidos em sessão.")
+    if st.button("🗑️ Confirmar e Limpar Tudo", key="btn_limpar_tudo"):
+        st.session_state.clear()
+        st.success("Sessão e dados limpos com sucesso!")
+        st.rerun()
+
+# --- OPÇÃO 5: SOMENTE TRABALHADORES ATIVOS ---
 elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
     titulo_estilizado("Filtro de Trabalhadores Ativos")
+    
+    if st.session_state.get("wb_data") is not None:
+        st.info("📁 Arquivo carregado automaticamente da memória.")
+        wb_temp = load_workbook(io.BytesIO(st.session_state["wb_data"]), data_only=True)
+        target_sheet = st.selectbox("Escolha a ABA para filtrar os trabalhadores ativos:", wb_temp.sheetnames, key="aba_op5")
+        header = st.number_input("Linha do cabeçalho:", value=11, min_value=1, key="header_op5")
+        
+        df = pd.read_excel(io.BytesIO(st.session_state["wb_data"]), sheet_name=target_sheet, header=header-1)
+        
+        col_saida = None
+        for col in df.columns:
+            if str(col).strip().upper() in ["SAIDA", "SAÍDA", "DATA SAIDA", "DATA SAÍDA", "DATA DE SAÍDA"]:
+                col_saida = col
+                break
+        
+        if col_saida:
+            st.write(f"📌 Coluna identificada para filtro de saída: **{col_saida}**")
+            df_ativos = df[df[col_saida].isna() | (df[col_saida].astype(str).str.strip() == "") | (df[col_saida].astype(str).str.strip().str.upper().isin(["NAN", "NAT", "NONE", "-"]))].copy()
+        else:
+            st.warning("⚠️ Nenhuma coluna 'SAÍDA' padrão foi identificada automaticamente. Selecione a coluna para filtrar:")
+            col_saida_manual = st.selectbox("Coluna indicadora de saída/desligamento:", df.columns, key="col_saida_manual")
+            df_ativos = df[df[col_saida_manual].isna() | (df[col_saida_manual].astype(str).str.strip() == "") | (df[col_saida_manual].astype(str).str.strip().str.upper().isin(["NAN", "NAT", "NONE", "-"]))].copy()
+        
+        st.metric("Total de Trabalhadores Ativos", len(df_ativos))
+        
+        df_ativos_fmt = formatar_datas_dataframe(df_ativos)
+        st.dataframe(df_ativos_fmt, use_container_width=True, hide_index=True)
+        
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df_ativos.to_excel(writer, sheet_name="Ativos", index=False)
+        
+        st.download_button(
+            "📥 Baixar Lista de Trabalhadores Ativos (.xlsx)",
+            buffer.getvalue(),
+            "trabalhadores_ativos.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.warning("⚠️ Nenhum arquivo de destino encontrado na memória. Faça o upload abaixo para filtrar:")
+        sinale_file_op5 = st.file_uploader("Selecione o arquivo do SINALE (.xlsx)", type=["xlsx"], key="upload_op5")
+        if sinale_file_op5:
+            st.session_state["wb_data"] = sinale_file_op5.getvalue()
+            st.session_state['last_sinale_name'] = sinale_file_op5.name
+            st.rerun()
+
+# --- OPÇÃO 6: SAIR DO SISTEMA ---
 elif menu_opcao == "SAIR DO SISTEMA":
+    st.info("Sistema encerrado com sucesso.")
     st.stop()
