@@ -553,21 +553,43 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             
                             df_tmp = df_tmp[~df_tmp['NOME_LIMPO'].isin(['', 'NAN', 'NONE', '0', 'NAT', 'NC', 'N/C'])].copy()
                             
+                            # --- AVALIAÇÃO E CATEGORIZAÇÃO LINHA A LINHA ---
                             aba_upper = sheet.strip().upper()
-                            if "COM REMUNER" in aba_upper:
-                                letras_desejadas = ['B', 'I', 'J', 'T', 'U', 'V', 'W']
-                            elif "SEM REMUNER" in aba_upper:
-                                letras_desejadas = ['I', 'B', 'W', 'R', 'S', 'T', 'U']
-                            else:
-                                letras_desejadas = ['J', 'C', 'X', 'F', 'S', 'T', 'U', 'V']
+                            is_com_remuner = "COM REMUNER" in aba_upper
+                            is_sem_remuner = "SEM REMUNER" in aba_upper
+                            col_F_nome = obter_nome_coluna_por_letra(df_tmp, colunas_originais, 'F')
                             
-                            nomes_colunas_exibir = []
-                            for let in letras_desejadas:
-                                col_nome = obter_nome_coluna_por_letra(df_tmp, colunas_originais, let)
-                                if col_nome:
-                                    nomes_colunas_exibir.append(str(col_nome))
+                            def categorizar_e_ordenar_linha(row):
+                                if is_com_remuner:
+                                    cat = "COM REMUNERAÇÃO"
+                                    letras = ['B', 'I', 'J', 'T', 'U', 'V', 'W']
+                                elif is_sem_remuner:
+                                    cat = "SEM REMUNERAÇÃO"
+                                    letras = ['I', 'B', 'W', 'R', 'S', 'T', 'U']
+                                else:
+                                    # Para Aba Única / Outras Abas, verifica o valor da Coluna F
+                                    val_f = str(row[col_F_nome]).strip().upper() if col_F_nome and col_F_nome in row and pd.notna(row[col_F_nome]) else ""
+                                    if val_f == 'SIM':
+                                        cat = "COM REMUNERAÇÃO"
+                                        letras = ['J', 'C', 'X', 'S', 'T', 'U', 'V']
+                                    elif val_f in ['NÃO', 'NAO']:
+                                        cat = "SEM REMUNERAÇÃO"
+                                        letras = ['I', 'B', 'W', 'R', 'S', 'T', 'U']
+                                    else:
+                                        cat = "OUTRAS ABAS"
+                                        letras = ['J', 'C', 'X', 'F', 'R', 'S', 'T', 'U', 'V', 'W']
+                                
+                                nomes_cols = []
+                                for let in letras:
+                                    col_n = obter_nome_coluna_por_letra(df_tmp, colunas_originais, let)
+                                    if col_n:
+                                        nomes_cols.append(str(col_n))
+                                return pd.Series([cat, "|".join(nomes_cols)], index=['Categoria_Aba', 'Ordem_Colunas'])
+
+                            res_linha = df_tmp.apply(categorizar_e_ordenar_linha, axis=1)
+                            df_tmp['Categoria_Aba'] = res_linha['Categoria_Aba']
+                            df_tmp['Ordem_Colunas'] = res_linha['Ordem_Colunas']
                             
-                            df_tmp['Ordem_Colunas'] = "|".join(nomes_colunas_exibir)
                             all_results.append(df_tmp)
                     except Exception as e:
                         st.error(f"Erro ao ler {f.name} - Aba {sheet}: {e}")
@@ -600,17 +622,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.metric("Total de Registros Encontrados", len(df_view))
         
         if not df_view.empty:
-            def categorizar_aba(aba_name):
-                aba_upper = str(aba_name).strip().upper()
-                if "COM REMUNER" in aba_upper:
-                    return "COM REMUNERAÇÃO"
-                elif "SEM REMUNER" in aba_upper:
-                    return "SEM REMUNERAÇÃO"
-                else:
-                    return "OUTRAS ABAS"
-            
-            df_view['Categoria_Aba'] = df_view['Aba Original'].apply(categorizar_aba)
-            
             df_display_all = formatar_datas_dataframe(df_view)
             
             grupos_categorias = [
@@ -625,7 +636,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 if not df_grupo.empty:
                     cols_ordem = []
                     for seq in df_grupo['Ordem_Colunas'].dropna().unique():
-                        for c in seq.split('|'):
+                        for c in str(seq).split('|'):
                             if c and c not in cols_ordem:
                                 cols_ordem.append(c)
                     
