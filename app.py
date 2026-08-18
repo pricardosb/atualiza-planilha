@@ -82,16 +82,16 @@ def obter_estatisticas_mes(ano, mes):
     pascoa = calcular_pascoa(ano)
     feriados = [
         datetime.date(ano, 1, 1),
-        pascoa - datetime.timedelta(days=47), # Carnaval
-        pascoa - datetime.timedelta(days=2),  # Sexta-feira Santa
+        pascoa - datetime.timedelta(days=47),
+        pascoa - datetime.timedelta(days=2),
         datetime.date(ano, 4, 21),
         datetime.date(ano, 5, 1),
-        pascoa + datetime.timedelta(days=60), # Corpus Christi
+        pascoa + datetime.timedelta(days=60),
         datetime.date(ano, 9, 7),
         datetime.date(ano, 10, 12),
         datetime.date(ano, 11, 2),
         datetime.date(ano, 11, 15),
-        datetime.date(ano, 11, 20), # Consciência Negra
+        datetime.date(ano, 11, 20),
         datetime.date(ano, 12, 25)
     ]
     feriados_mes = [f for f in feriados if f.month == mes and f.year == ano]
@@ -107,7 +107,7 @@ def obter_estatisticas_mes(ano, mes):
             dia = semana[i]
             if dia != 0:
                 data_atual = datetime.date(ano, mes, dia)
-                wd = data_atual.weekday() # 0=Seg, ..., 5=Sáb, 6=Dom
+                wd = data_atual.weekday()
                 if wd < 5:
                     dias_seg_sex_total += 1
                     dias_seg_sab_total += 1
@@ -149,13 +149,8 @@ def gerar_arquivo_atualizado_bytes(source_input, header, fila, df_original, shee
                     current_font = cell.font
                     if current_font:
                         cell.font = Font(
-                            name=current_font.name,
-                            size=current_font.size,
-                            bold=current_font.bold,
-                            italic=current_font.italic,
-                            strike=current_font.strike,
-                            underline=current_font.underline,
-                            color="FF0000"
+                            name=current_font.name, size=current_font.size, bold=current_font.bold,
+                            italic=current_font.italic, strike=current_font.strike, underline=current_font.underline, color="FF0000"
                         )
                     else:
                         cell.font = Font(color="FF0000")
@@ -168,7 +163,6 @@ def titulo_estilizado(subtitulo=""):
     st.markdown(f"<div style='text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border-radius: 12px; margin-bottom: 1.5rem;'><h1>⚡ SINALE WEB</h1><p>{subtitulo}</p></div>", unsafe_allow_html=True)
 
 def extrair_mes_ano_m9(file_bytes, sheets_available):
-    """Extrai a informação de MÊS/ANO na célula M9 (Linha 9, Coluna M/13) da aba 'COM REMUNERAÇÃO'."""
     try:
         target_sheet = None
         for s in sheets_available:
@@ -180,18 +174,23 @@ def extrair_mes_ano_m9(file_bytes, sheets_available):
             
         file_bytes.seek(0)
         df_cell = pd.read_excel(file_bytes, sheet_name=target_sheet, header=None, nrows=9)
-        val = df_cell.iloc[8, 12] # Linha 9 (índice 8), Coluna M (índice 12)
+        val = df_cell.iloc[8, 12]
         
-        if pd.isna(val) or str(val).strip() == "":
-            return "SEM MÊS/ANO"
-            
-        if isinstance(val, (datetime.datetime, datetime.date)):
-            return val.strftime("%m/%Y")
-            
-        val_str = str(val).strip()
-        return val_str
+        if pd.isna(val) or str(val).strip() == "": return "SEM MÊS/ANO"
+        if isinstance(val, (datetime.datetime, datetime.date)): return val.strftime("%m/%Y")
+        return str(val).strip()
     except Exception:
         return "SEM MÊS/ANO"
+
+def obter_nome_coluna_por_letra(df_ colunas_disponiveis, letra):
+    """Mapeia letra do Excel (ex: 'B') para o nome real da coluna no DataFrame se existir."""
+    mapa_letras = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7, 'I': 8, 'J': 9, 
+                   'K': 10, 'L': 11, 'M': 12, 'N': 13, 'O': 14, 'P': 15, 'Q': 16, 'R': 17, 'S': 18, 
+                   'T': 19, 'U': 20, 'V': 21, 'W': 22, 'X': 23, 'Y': 24, 'Z': 25}
+    idx = mapa_letras.get(letra.upper())
+    if idx is not None and idx < len(colunas_disponiveis):
+        return colunas_disponiveis[idx]
+    return None
 
 # --- MENU ---
 menu_opcao = st.sidebar.radio("Selecione a rotina:", [
@@ -400,7 +399,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             sheets_available = xl.sheet_names
             
             with st.expander(f"📁 Configurações para: {f.name}", expanded=True):
-                # Regra de seleção: Procura abas de remuneração. Se não achar nenhuma, pega APENAS A PRIMEIRA ABA, seja qual for o nome.
                 pref_sheets = [s for s in sheets_available if any(p in s.strip().upper() for p in ["COM REMUNER", "SEM REMUNER"])]
                 if pref_sheets:
                     default_sheets = pref_sheets
@@ -427,32 +425,20 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     
                     if "COM REMUNER" in sheet_upper:
                         for c in cols_aba:
-                            if str(c).strip().upper() == "NOME":
-                                default_col = c
-                                break
-                        if not default_col and len(cols_aba) > 8:
-                            default_col = cols_aba[8]
+                            if str(c).strip().upper() == "NOME": default_col = c; break
+                        if not default_col and len(cols_aba) > 8: default_col = cols_aba[8]
                     elif "SEM REMUNER" in sheet_upper:
                         for c in cols_aba:
-                            if str(c).strip().upper() == "NOME DO INTERNO":
-                                default_col = c
-                                break
-                        if not default_col and len(cols_aba) > 8:
-                            default_col = cols_aba[8]
+                            if str(c).strip().upper() == "NOME DO INTERNO": default_col = c; break
+                        if not default_col and len(cols_aba) > 8: default_col = cols_aba[8]
                     else:
                         for c in cols_aba:
-                            if str(c).strip().upper() == "NOME":
-                                default_col = c
-                                break
+                            if str(c).strip().upper() == "NOME": default_col = c; break
                         if not default_col:
                             for c in cols_aba:
-                                if "NOME" in str(c).strip().upper():
-                                    default_col = c
-                                    break
-                        if not default_col and len(cols_aba) > 8:
-                            default_col = cols_aba[8]
-                        elif not default_col and cols_aba:
-                            default_col = cols_aba[0]
+                                if "NOME" in str(c).strip().upper(): default_col = c; break
+                        if not default_col and len(cols_aba) > 8: default_col = cols_aba[8]
+                        elif not default_col and cols_aba: default_col = cols_aba[0]
                     
                     opcoes_colunas = ["--- Não pesquisar nesta aba ---"] + cols_aba
                     default_idx = opcoes_colunas.index(default_col) if default_col in opcoes_colunas else 0
@@ -504,7 +490,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.markdown("---")
         st.subheader("🔍 Filtros de Visualização e Busca")
         
-        # 1. PRIMEIRO: Efetuar a pesquisa e seleção do nome
         nomes_disponiveis = sorted(df_pesq['Nome (Visualização)'].dropna().unique())
         nomes_selecionados = st.multiselect(
             "🔍 Digite para pesquisar e selecione o(s) nome(s):",
@@ -518,29 +503,29 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             
         st.metric("Total de Registros Encontrados", len(df_view))
         
-        # 2. SEGUNDO: Exibir APENAS os campos da aba de origem onde o item selecionado foi encontrado
+        # Exibição automática das colunas de acordo com a aba de origem
         if not df_view.empty:
-            abas_presentes = df_view['Aba Original'].unique()
-            
-            colunas_disponiveis_aba = []
-            cols_controle = ['MÊS/ANO - ABA', 'Nome (Visualização)', 'Campo Pesquisado']
-            
-            for aba in abas_presentes:
-                df_aba_temp = df_view[df_view['Aba Original'] == aba]
-                outras_cols = [c for c in df_aba_temp.columns if c not in cols_controle and c not in ['Valor_Busca', 'Aba Original']]
-                for c in outras_cols:
-                    if c not in colunas_disponiveis_aba:
-                        colunas_disponiveis_aba.append(c)
-            
-            lista_colunas_full = cols_controle + colunas_disponiveis_aba
-            
-            st.info(f"💡 Aba(s) de origem identificada(s) para o(s) registro(s) selecionado(s): **{', '.join(abas_presentes)}**. Os campos abaixo pertencem estritamente a esta(s) aba(s).")
-            cols_para_ver = st.multiselect("Selecione os campos para visualizar:", options=lista_colunas_full, default=cols_controle, key="cols_ver_op3")
-            
-            if cols_para_ver: 
-                st.dataframe(df_view[cols_para_ver], use_container_width=True)
-            else: 
-                st.info("ℹ️ Selecione ao menos um campo acima para exibir a tabela de visualização.")
+            for aba in df_view['Aba Original'].unique():
+                df_aba_temp = df_view[df_view['Aba Original'] == aba].copy()
+                colunas_originais = [c for c in df_aba_temp.columns if c not in ['MÊS/ANO - ABA', 'Aba Original', 'Campo Pesquisado', 'Valor_Busca', 'Nome (Visualização)']]
+                
+                # Definir regras de letras solicitadas
+                aba_upper = aba.strip().upper()
+                if "COM REMUNER" in aba_upper:
+                    letras_desejadas = ['B', 'I', 'J', 'T', 'U', 'V', 'W']
+                elif "SEM REMUNER" in aba_upper:
+                    letras_desejadas = ['I', 'B', 'W', 'R', 'S', 'T', 'U']
+                else:
+                    letras_desejadas = ['J', 'C', 'X', 'S', 'T', 'U', 'V']
+                
+                colunas_finais = ['MÊS/ANO - ABA']
+                for let in letras_desejadas:
+                    col_nome = obter_nome_coluna_por_letra(df_aba_temp, colunas_originais, let)
+                    if col_nome and col_nome not in colunas_finais:
+                        colunas_finais.append(col_nome)
+                
+                st.markdown(f"#### 📁 Resultados na Aba: `{aba}`")
+                st.dataframe(df_aba_temp[colunas_finais], use_container_width=True)
         else:
             st.info("ℹ️ Nenhum registro selecionado ou encontrado na pesquisa.")
 
