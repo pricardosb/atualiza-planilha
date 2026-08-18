@@ -705,7 +705,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             df_tmp["Campo Pesquisado"] = target_col
 
                             val_nome = df_tmp[target_col].astype(str).str.strip()
-                            df_tmp["Nome (Visualização)"] = val_nome + " - " + sheet
+                            df_tmp["Nome (Visualização)"] = val_nome
                             df_tmp["NOME_LIMPO"] = val_nome.str.upper()
 
                             df_tmp = df_tmp[~df_tmp["NOME_LIMPO"].isin(['', 'NAN', 'NONE', '0', 'NAT', 'NC', 'N/C'])].copy()
@@ -716,18 +716,14 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             col_f = obter_nome_coluna_por_letra(df_tmp, colunas_originais, 'F')
 
                             def extrair_dados_e_categoria(row):
-                                # 1. Aba 'COM REMUNER' (Exibe B, I, J, T, U, V, W)
                                 if is_com_remuner:
                                     cat = "COM REMUNERAÇÃO"
                                     letras = ["B", "I", "J", "T", "U", "V", "W"]
 
-                                # 2. Aba 'SEM REMUNER' (Exibe I, B, W, R, S, T, U)
                                 elif is_sem_remuner:
                                     cat = "SEM REMUNERAÇÃO"
                                     letras = ["I", "B", "W", "R", "S", "T", "U"]
 
-                                # 3. OUTRAS ABAS -> Exibe SEMPRE J, C, X, S, T, U, V
-                                # O valor da Coluna F apenas define o local de exibição (COM ou SEM REMUNERAÇÃO)
                                 else:
                                     val_f = row[col_f] if (col_f and col_f in row) else None
                                     is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
