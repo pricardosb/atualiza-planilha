@@ -586,27 +586,51 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.metric("Total de Registros Encontrados", len(df_view))
         
         if not df_view.empty:
-            # Agrupa diretamente por MÊS/ANO - ABA (sem exibir nome de arquivo no título)
-            for aba_info, df_grupo in df_view.groupby('MÊS/ANO - ABA', sort=False):
-                # Formatação para ocultar componente de horas de todas as colunas de data
-                df_display = formatar_datas_dataframe(df_grupo)
+            # Função para categorizar as abas em 3 grupos
+            def categorizar_aba(aba_name):
+                aba_upper = str(aba_name).strip().upper()
+                if "COM REMUNER" in aba_upper:
+                    return "COM REMUNERAÇÃO"
+                elif "SEM REMUNER" in aba_upper:
+                    return "SEM REMUNERAÇÃO"
+                else:
+                    return "OUTRAS ABAS"
+            
+            df_view['Categoria_Aba'] = df_view['Aba Original'].apply(categorizar_aba)
+            
+            # Formatação de datas para ocultar horários
+            df_display_all = formatar_datas_dataframe(df_view)
+            
+            grupos_categorias = [
+                ("🟢 COM REMUNERAÇÃO", "COM REMUNERAÇÃO"),
+                ("🟡 SEM REMUNERAÇÃO", "SEM REMUNERAÇÃO"),
+                ("🔵 OUTRAS ABAS", "OUTRAS ABAS")
+            ]
+            
+            for titulo_grupo, cat_key in grupos_categorias:
+                df_grupo = df_display_all[df_display_all['Categoria_Aba'] == cat_key]
                 
-                ordem_str = df_display['Ordem_Colunas'].dropna().iloc[0] if not df_display['Ordem_Colunas'].dropna().empty else ""
-                colunas_dinamicas = ordem_str.split("|") if ordem_str else []
-                
-                colunas_finais = ['MÊS/ANO - ABA']
-                for c in colunas_dinamicas:
-                    if c in df_display.columns and c not in colunas_finais:
-                        colunas_finais.append(c)
-                
-                if len(colunas_finais) == 1:
-                    for c in df_display.columns:
-                        if c not in ['MÊS/ANO - ABA', 'Aba Original', 'Campo Pesquisado', 'Nome (Visualização)', 'NOME_LIMPO', 'Ordem_Colunas']:
+                if not df_grupo.empty:
+                    # Mapeia colunas dinâmicas ordenadas do grupo
+                    cols_ordem = []
+                    for seq in df_grupo['Ordem_Colunas'].dropna().unique():
+                        for c in seq.split('|'):
+                            if c and c not in cols_ordem:
+                                cols_ordem.append(c)
+                    
+                    colunas_finais = ['MÊS/ANO - ABA']
+                    for c in cols_ordem:
+                        if c in df_grupo.columns and c not in colunas_finais:
                             colunas_finais.append(c)
-                
-                st.markdown(f"#### 📅 `{aba_info}`")
-                # Ajustado para largura total e ocultar a coluna padrão de índice
-                st.dataframe(df_display[colunas_finais], use_container_width=True, hide_index=True)
+                    
+                    if len(colunas_finais) == 1:
+                        for c in df_grupo.columns:
+                            if c not in ['MÊS/ANO - ABA', 'Aba Original', 'Campo Pesquisado', 'Nome (Visualização)', 'NOME_LIMPO', 'Ordem_Colunas', 'Categoria_Aba']:
+                                colunas_finais.append(c)
+                    
+                    st.markdown(f"### {titulo_grupo} ({len(df_grupo)} registro(s))")
+                    st.dataframe(df_grupo[colunas_finais], use_container_width=True, hide_index=True)
+                    st.markdown("---")
         else:
             st.info("ℹ️ Nenhum registro selecionado ou encontrado na pesquisa.")
 
