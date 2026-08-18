@@ -553,13 +553,15 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             
                             df_tmp = df_tmp[~df_tmp['NOME_LIMPO'].isin(['', 'NAN', 'NONE', '0', 'NAT', 'NC', 'N/C'])].copy()
                             
-                            # --- AVALIAÇÃO E CATEGORIZAÇÃO LINHA A LINHA ---
                             aba_upper = sheet.strip().upper()
                             is_com_remuner = "COM REMUNER" in aba_upper
                             is_sem_remuner = "SEM REMUNER" in aba_upper
                             col_F_nome = obter_nome_coluna_por_letra(df_tmp, colunas_originais, 'F')
                             
-                            def categorizar_e_ordenar_linha(row):
+                            # --- MAPEAMENTO E EXTRAÇÃO POSICIONAL LINHA A LINHA ---
+                            def extrair_dados_e_categoria(row):
+                                val_f = str(row[col_F_nome]).strip().upper() if col_F_nome and col_F_nome in row and pd.notna(row[col_F_nome]) else ""
+                                
                                 if is_com_remuner:
                                     cat = "COM REMUNERAÇÃO"
                                     letras = ['B', 'I', 'J', 'T', 'U', 'V', 'W']
@@ -567,30 +569,31 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     cat = "SEM REMUNERAÇÃO"
                                     letras = ['I', 'B', 'W', 'R', 'S', 'T', 'U']
                                 else:
-                                    # Para Aba Única / Outras Abas, verifica o valor da Coluna F
-                                    val_f = str(row[col_F_nome]).strip().upper() if col_F_nome and col_F_nome in row and pd.notna(row[col_F_nome]) else ""
                                     if val_f == 'SIM':
                                         cat = "COM REMUNERAÇÃO"
+                                        # B=J; I=C; J=X; T=S; U=T; V=U; W=V
                                         letras = ['J', 'C', 'X', 'S', 'T', 'U', 'V']
                                     elif val_f in ['NÃO', 'NAO']:
                                         cat = "SEM REMUNERAÇÃO"
                                         letras = ['I', 'B', 'W', 'R', 'S', 'T', 'U']
                                     else:
                                         cat = "OUTRAS ABAS"
-                                        letras = ['J', 'C', 'X', 'F', 'R', 'S', 'T', 'U', 'V', 'W']
+                                        # Coluna F é omitida da exibição
+                                        letras = ['J', 'C', 'X', 'R', 'S', 'T', 'U', 'V', 'W']
                                 
-                                nomes_cols = []
-                                for let in letras:
+                                row_vals = {'Categoria_Aba': cat}
+                                for idx_p, let in enumerate(letras):
                                     col_n = obter_nome_coluna_por_letra(df_tmp, colunas_originais, let)
-                                    if col_n:
-                                        nomes_cols.append(str(col_n))
-                                return pd.Series([cat, "|".join(nomes_cols)], index=['Categoria_Aba', 'Ordem_Colunas'])
+                                    val = row[col_n] if col_n and col_n in row else None
+                                    header_title = str(col_n) if col_n else f"Campo {idx_p+1}"
+                                    row_vals[f"POS_{idx_p}"] = val
+                                    row_vals[f"HEADER_{idx_p}"] = header_title
+                                    
+                                return pd.Series(row_vals)
 
-                            res_linha = df_tmp.apply(categorizar_e_ordenar_linha, axis=1)
-                            df_tmp['Categoria_Aba'] = res_linha['Categoria_Aba']
-                            df_tmp['Ordem_Colunas'] = res_linha['Ordem_Colunas']
-                            
-                            all_results.append(df_tmp)
+                            res_df = df_tmp.apply(extrair_dados_e_categoria, axis=1)
+                            df_processed = pd.concat([df_tmp[['MÊS/ANO - ABA', 'Aba Original', 'Campo Pesquisado', 'Nome (Visualização)', 'NOME_LIMPO']], res_df], axis=1)
+                            all_results.append(df_processed)
                     except Exception as e:
                         st.error(f"Erro ao ler {f.name} - Aba {sheet}: {e}")
             
@@ -634,27 +637,38 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 df_grupo = df_display_all[df_display_all['Categoria_Aba'] == cat_key]
                 
                 if not df_grupo.empty:
-                    cols_ordem = []
-                    for seq in df_grupo['Ordem_Colunas'].dropna().unique():
-                        for c in str(seq).split('|'):
-                            if c and c not in cols_ordem:
-                                cols_ordem.append(c)
+                    # Identifica e ordena as colunas posicionais (POS_0, POS_1, ...)
+                    pos_cols = [c for c in df_grupo.columns if str(c).startswith("POS_")]
+                    pos_cols.sort(key=lambda x: int(x.split("_")[1]))
                     
-                    colunas_finais = ['MÊS/ANO - ABA']
-                    for c in cols_ordem:
-                        if c in df_grupo.columns and c not in colunas_finais:
-                            colunas_finais.append(c)
+                    # Constrói o mapa de renomeação uniforme para os cabeçalhos das colunas
+                    rename_map = {}
+                    for pos_col in pos_cols:
+                        idx_num = pos_col.split("_")[1]
+                        hdr_col = f"HEADER_{idx_num}"
+                        
+                        hdr_name = None
+                        if hdr_col in df_grupo.columns:
+                            valid_hdrs = df_grupo[hdr_col].dropna().unique()
+                            if len(valid_hdrs) > 0:
+                                hdr_name = str(valid_hdrs[0])
+                        
+                        if not hdr_name or hdr_name.strip() == "":
+                            hdr_name = f"Campo {int(idx_num)+1}"
+                        
+                        if hdr_name in rename_map.values():
+                            hdr_name = f"{hdr_name} ({idx_num})"
+                            
+                        rename_map[pos_col] = hdr_name
                     
-                    if len(colunas_finais) == 1:
-                        for c in df_grupo.columns:
-                            if c not in ['MÊS/ANO - ABA', 'Aba Original', 'Campo Pesquisado', 'Nome (Visualização)', 'NOME_LIMPO', 'Ordem_Colunas', 'Categoria_Aba']:
-                                colunas_finais.append(c)
+                    cols_exibir = ['MÊS/ANO - ABA'] + pos_cols
+                    df_render = df_grupo[cols_exibir].rename(columns=rename_map)
                     
-                    col_config_conteudo = gerar_config_largura_colunas(df_grupo, colunas_finais)
+                    col_config_conteudo = gerar_config_largura_colunas(df_render, df_render.columns.tolist())
                     
-                    st.markdown(f"### {titulo_grupo} ({len(df_grupo)} registro(s))")
+                    st.markdown(f"### {titulo_grupo} ({len(df_render)} registro(s))")
                     st.dataframe(
-                        df_grupo[colunas_finais], 
+                        df_render, 
                         column_config=col_config_conteudo,
                         use_container_width=True, 
                         hide_index=True
