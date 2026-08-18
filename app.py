@@ -642,7 +642,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                 settings[file_key] = sheet_config
 
-        # Autoscroll suave para o botão de consolidação
         components.html(
             """
             <script>
@@ -783,11 +782,11 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             df_display_all = formatar_datas_dataframe(df_view)
 
             grupos_categorias = [
-                ("🟢 COM REMUNERAÇÃO", "COM REMUNERAÇÃO"),
-                ("🟡 SEM REMUNERAÇÃO", "SEM REMUNERAÇÃO")
+                ("🟢 COM REMUNERAÇÃO", "COM REMUNERAÇÃO", "com_rem"),
+                ("🟡 SEM REMUNERAÇÃO", "SEM REMUNERAÇÃO", "sem_rem")
             ]
 
-            for titulo_grupo, cat_key in grupos_categorias:
+            for titulo_grupo, cat_key, prefixo_key in grupos_categorias:
                 df_grupo = df_display_all[df_display_all["Categoria_Aba"] == cat_key]
 
                 if not df_grupo.empty:
@@ -816,10 +815,40 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     cols_exibir = ["MÊS/ANO - ABA"] + pos_cols
                     df_render = df_grupo[cols_exibir].rename(columns=rename_map)
 
-                    col_config_conteudo = gerar_config_largura_colunas(df_render, df_render.columns.tolist())
-
                     st.markdown(f"### {titulo_grupo} ({len(df_render)} registro(s))")
-                    st.dataframe(df_render, column_config=col_config_conteudo, use_container_width=True, hide_index=True)
+
+                    # Estado da Seleção em Massa
+                    key_select = f"select_all_{prefixo_key}"
+                    if key_select not in st.session_state:
+                        st.session_state[key_select] = False
+
+                    col_b1, col_b2, _ = st.columns([1, 1, 4])
+                    with col_b1:
+                        if st.button("✅ Marcar Todos", key=f"btn_marcar_{prefixo_key}"):
+                            st.session_state[key_select] = True
+                            st.rerun()
+                    with col_b2:
+                        if st.button("❌ Desmarcar Todos", key=f"btn_desmarcar_{prefixo_key}"):
+                            st.session_state[key_select] = False
+                            st.rerun()
+
+                    # Inserção da coluna de seleção
+                    df_render.insert(0, "Selecionar?", st.session_state[key_select])
+
+                    col_config_conteudo = gerar_config_largura_colunas(df_render, df_render.columns.tolist())
+                    col_config_conteudo["Selecionar?"] = st.column_config.CheckboxColumn("Selecionar?", default=False)
+
+                    # Tabela editável com caixas de seleção
+                    df_editado_res = st.data_editor(
+                        df_render,
+                        column_config=col_config_conteudo,
+                        use_container_width=True,
+                        hide_index=True,
+                        key=f"editor_res_{prefixo_key}"
+                    )
+
+                    total_marcados = len(df_editado_res[df_editado_res["Selecionar?"] == True])
+                    st.caption(f"📌 **{total_marcados}** item(ns) selecionado(s) nesta tabela.")
                     st.markdown("---")
         else:
             st.info("ℹ️ Nenhum registro selecionado ou encontrado na pesquisa.")
