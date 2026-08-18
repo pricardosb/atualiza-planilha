@@ -399,9 +399,18 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             xl = pd.ExcelFile(io.BytesIO(f_bytes))
             sheets_available = xl.sheet_names
             
+            # Regra: Filtrar abas de Remuneração
+            pref_sheets = [s for s in sheets_available if any(p in s.strip().upper() for p in ["COM REMUNER", "SEM REMUNER"])]
+            
+            # Se existirem, seleciona apenas elas. Caso contrário, pega a primeira aba
+            if pref_sheets:
+                default_sheets = pref_sheets
+                is_fallback = False
+            else:
+                default_sheets = [sheets_available[0]] if sheets_available else []
+                is_fallback = True
+            
             with st.expander(f"📁 Configurações para: Arquivo {f_idx+1} - {f.name}", expanded=True):
-                # Carrega todas as abas por padrão
-                default_sheets = sheets_available
                 selected_sheets = st.multiselect(
                     f"Selecione aba(s) para {f.name}", 
                     sheets_available, 
@@ -412,7 +421,14 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 sheet_config = {}
                 for i, sheet in enumerate(selected_sheets):
                     st.markdown(f"**Aba: `{sheet}`**")
-                    default_header = 10
+                    
+                    # Regra de Linha de Cabeçalho: 11 para COM/SEM REMUNERAÇÃO, 10 para primeira aba (fallback)
+                    sheet_upper = sheet.strip().upper()
+                    if any(p in sheet_upper for p in ["COM REMUNER", "SEM REMUNER"]):
+                        default_header = 11
+                    else:
+                        default_header = 10 if is_fallback else 11
+                    
                     header_row = st.number_input(
                         f"Linha do cabeçalho para aba '{sheet}'", 
                         value=default_header, 
@@ -426,15 +442,24 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     except:
                         cols_aba = []
                     
+                    # Regra de busca automática de coluna por NOME / NOME DO INTERNO
                     default_col = None
                     for c in cols_aba:
-                        if str(c).strip().upper() == "NOME DO INTERNO": default_col = c; break
+                        c_up = str(c).strip().upper()
+                        if c_up in ["NOME DO INTERNO", "NOME DO INTERNO "]:
+                            default_col = c; break
                     if not default_col:
                         for c in cols_aba:
-                            if str(c).strip().upper() == "NOME": default_col = c; break
+                            if str(c).strip().upper() == "NOME":
+                                default_col = c; break
                     if not default_col:
                         for c in cols_aba:
-                            if "NOME" in str(c).strip().upper(): default_col = c; break
+                            if str(c).strip().upper().startswith("NOME"):
+                                default_col = c; break
+                    if not default_col:
+                        for c in cols_aba:
+                            if "NOME" in str(c).strip().upper():
+                                default_col = c; break
                     if not default_col and len(cols_aba) > 8: default_col = cols_aba[8]
                     elif not default_col and cols_aba: default_col = cols_aba[0]
                     
@@ -498,15 +523,12 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             df_tmp['Arquivo Original'] = f.name
                             df_tmp['Campo Pesquisado'] = target_col
                             
-                            # Formatação da identificação Nome - Aba
                             val_nome = df_tmp[target_col].astype(str).str.strip()
                             df_tmp['Nome (Visualização)'] = val_nome + " - " + sheet
                             df_tmp['NOME_LIMPO'] = val_nome.str.upper()
                             
-                            # Filtragem de valores vazios
                             df_tmp = df_tmp[~df_tmp['NOME_LIMPO'].isin(['', 'NAN', 'NONE', '0', 'NAT', 'NC', 'N/C'])].copy()
                             
-                            # Regras de exibição de colunas por aba
                             aba_upper = sheet.strip().upper()
                             if "COM REMUNER" in aba_upper:
                                 letras_desejadas = ['B', 'I', 'J', 'T', 'U', 'V', 'W']
@@ -540,7 +562,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.markdown("---")
         st.subheader("🔍 Filtros de Visualização e Busca")
         
-        # Exibe as opções no formato "NOME - ABA"
         nomes_disponiveis = sorted(df_pesq['Nome (Visualização)'].dropna().unique())
         nomes_selecionados = st.multiselect(
             "🔍 Digite para pesquisar e selecione o(s) nome(s):",
@@ -555,7 +576,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.metric("Total de Registros Encontrados", len(df_view))
         
         if not df_view.empty:
-            # Agrupa os resultados por Arquivo e por Aba
             for (arq, aba), df_grupo in df_view.groupby(['Arquivo Original', 'Aba Original'], sort=False):
                 ordem_str = df_grupo['Ordem_Colunas'].dropna().iloc[0] if not df_grupo['Ordem_Colunas'].dropna().empty else ""
                 colunas_dinamicas = ordem_str.split("|") if ordem_str else []
