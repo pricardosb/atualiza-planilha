@@ -945,34 +945,57 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         for nome_interno in nomes_unicos:
                             df_nome_sel = selecionados_grupo[selecionados_grupo["NOME"] == nome_interno]
                             
-                            # Extrai Organização e Função uma única vez por pessoa
+                            # Extrai Organização, Função e Saída uma única vez por pessoa
                             organiz_val = ", ".join([str(v) for v in df_nome_sel["ORGANIZ"].dropna().unique() if str(v).strip() != ""])
                             funcao_val = ", ".join([str(v) for v in df_nome_sel["FUNÇÃO"].dropna().unique() if str(v).strip() != ""])
+                            saida_val = ", ".join([str(v) for v in df_nome_sel["SAIDA"].dropna().unique() if str(v).strip() != ""])
                             
-                            st.markdown(f"**NOME:** {nome_interno}")
-                            st.markdown(f"**ORGANIZAÇÃO:** {organiz_val if organiz_val else 'N/A'}")
-                            st.markdown(f"**FUNÇÃO:** {funcao_val if funcao_val else 'N/A'}")
+                            # Exibe todos os dados do cabeçalho LADO A LADO na mesma linha
+                            st.markdown(
+                                f"**NOME:** {nome_interno} &nbsp;|&nbsp; "
+                                f"**ORGANIZAÇÃO:** {organiz_val if organiz_val else 'N/A'} &nbsp;|&nbsp; "
+                                f"**FUNÇÃO:** {funcao_val if funcao_val else 'N/A'} &nbsp;|&nbsp; "
+                                f"**REMUNERAÇÃO:** {cat_key} &nbsp;|&nbsp; "
+                                f"**SAÍDA:** {saida_val if saida_val else 'N/A'}"
+                            )
                             
-                            dados_salvamento = []
+                            # Prepara matriz agrupada por ANO (Linhas) e MÊS (Colunas) contendo o valor REAL
+                            matrix_data = []
                             for _, r_row in df_nome_sel.iterrows():
                                 raw_mes_ano_aba = str(r_row.get("MES/ANO - ABA", ""))
                                 data_mes_ano = raw_mes_ano_aba.split(" - ")[0] if " - " in raw_mes_ano_aba else raw_mes_ano_aba
                                 
-                                dados_salvamento.append({
-                                    "DATA": data_mes_ano,
-                                    "REAL": r_row.get("REAL", ""),
-                                    "SAIDA": r_row.get("SAIDA", ""),
-                                    "ABA": cat_key
+                                mes_str, ano_str = "N/A", "N/A"
+                                if "/" in data_mes_ano:
+                                    parts = data_mes_ano.split("/")
+                                    if len(parts) == 2:
+                                        mes_str, ano_str = parts[0].strip(), parts[1].strip()
+                                
+                                val_real = r_row.get("REAL", "")
+                                
+                                matrix_data.append({
+                                    "ANO": ano_str,
+                                    "MÊS": mes_str,
+                                    "REAL": val_real
                                 })
                             
-                            df_tabela_salvamento = pd.DataFrame(dados_salvamento)
+                            if matrix_data:
+                                df_mat = pd.DataFrame(matrix_data)
+                                
+                                # Tabela Dinâmica: Linhas = ANO, Colunas = MÊS, Células = REAL
+                                df_pivot = df_mat.pivot_table(
+                                    index="ANO",
+                                    columns="MÊS",
+                                    values="REAL",
+                                    aggfunc=lambda x: " / ".join([str(v) for v in x if pd.notna(v) and str(v).strip() != ""])
+                                ).fillna("")
+                                
+                                # Ordena as colunas de mês (01, 02, ..., 12)
+                                cols_meses = sorted(df_pivot.columns, key=lambda m: int(m) if str(m).isdigit() else m)
+                                df_pivot = df_pivot[cols_meses]
+                                
+                                st.dataframe(df_pivot, use_container_width=True)
                             
-                            # Imprime os campos do cabeçalho de todos os itens selecionados
-                            st.dataframe(
-                                df_tabela_salvamento[["DATA", "REAL", "SAIDA", "ABA"]],
-                                use_container_width=True,
-                                hide_index=True
-                            )
                             st.markdown("<br>", unsafe_allow_html=True)
                         st.markdown("---")
 
