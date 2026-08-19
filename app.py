@@ -689,17 +689,19 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 settings[file_key] = sheet_config
 
         # =====================================================================
-        # ROLAGEM AUTOMÁTICA APÓS CARREGAR OS ARQUIVOS E EXPANDERS
+        # 👇 ROLAGEM AUTOMÁTICA EXATA ATÉ O BOTÃO DE CONSOLIDAR (USANDO ÂNCORA)
         # =====================================================================
+        st.markdown('<div id="anchor_consolidar"></div>', unsafe_allow_html=True)
+        
         components.html(
             """
             <script>
                 setTimeout(function() {
-                    const doc = window.parent.document;
-                    // Tenta mirar nos contêineres padrão de rolagem do Streamlit
-                    const container = doc.querySelector('section.main') || doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement;
-                    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-                }, 500);
+                    var target = window.parent.document.getElementById('anchor_consolidar');
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }, 600);
             </script>
             """,
             height=0
