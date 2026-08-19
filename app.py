@@ -258,15 +258,23 @@ def gerar_config_largura_colunas(df_subset, colunas):
     config = {}
     for col in colunas:
         if col in df_subset.columns:
-            max_len = df_subset[col].astype(str).str.len().max() if not df_subset[col].empty else 10
-            if pd.isna(max_len) or max_len <= 12:
-                config[col] = st.column_config.Column(width="small")
-            elif max_len <= 35:
-                config[col] = st.column_config.Column(width="medium")
-            else:
-                config[col] = st.column_config.Column(width="large")
+            # Pega o tamanho máximo do texto na coluna ou no próprio título do cabeçalho (o que for maior)
+            tamanho_conteudo = df_subset[col].astype(str).str.len().max() if not df_subset[col].empty else 0
+            tamanho_titulo = len(str(col))
+            max_len = max(tamanho_conteudo, tamanho_titulo)
+            
+            if pd.isna(max_len):
+                max_len = 10
+                
+            # Calcula a largura aproximada em pixels (ex: 8 a 9 pixels por caractere + margem de 30)
+            largura_pixels = int(max_len * 9) + 30
+            
+            # Limita a largura entre 80px (mínimo) e 500px (máximo) para não quebrar o visual
+            largura_pixels = max(80, min(largura_pixels, 500))
+            
+            config[col] = st.column_config.Column(width=largura_pixels)
+            
     return config
-
 
 # --- MENU PRINCIPAL ---
 menu_opcao = st.sidebar.radio(
