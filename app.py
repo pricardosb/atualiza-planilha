@@ -27,6 +27,8 @@ if "file_settings" not in st.session_state:
     st.session_state["file_settings"] = {}
 if "pesquisa_df" not in st.session_state:
     st.session_state["pesquisa_df"] = None
+if "executar_config" not in st.session_state:
+    st.session_state["executar_config"] = False
 
 
 # --- FUNÇÕES DE SUPORTE ---
@@ -215,7 +217,7 @@ def titulo_estilizado(subtitulo=""):
     )
 
 
-def extrair_mes_ano_m9(file_bytes_io, sheets_available):
+def extrair_mes_ano_m9(file_bytes_io, sheets_available, file_ext):
     try:
         target_sheet = None
         for s in sheets_available:
@@ -226,7 +228,8 @@ def extrair_mes_ano_m9(file_bytes_io, sheets_available):
             target_sheet = sheets_available[0]
 
         file_bytes_io.seek(0)
-        df_cell = pd.read_excel(file_bytes_io, sheet_name=target_sheet, header=None, nrows=9)
+        engine_val = 'odf' if file_ext == 'ods' else None
+        df_cell = pd.read_excel(file_bytes_io, sheet_name=target_sheet, header=None, nrows=9, engine=engine_val)
         val = df_cell.iloc[8, 12]
 
         if pd.isna(val) or str(val).strip() == "":
@@ -544,7 +547,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
     st.subheader("1. Configuração de Arquivos, Abas e Campos")
     
-    # DOIS BOTÕES NO INÍCIO: 1 PARA SELECIONAR ARQUIVOS E OUTRO PARA FAZER O UPLOAD
     col_btn_1, col_btn_2 = st.columns(2)
     with col_btn_1:
         uploaded_files = st.file_uploader(
@@ -554,12 +556,8 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             key="search_upload"
         )
     with col_btn_2:
-        st.markdown("<br>", unsafe_allow_html=True) # Espaçamento visual
+        st.markdown("<br>", unsafe_allow_html=True)
         fazer_upload_btn = st.button("2. Fazer Upload e Configurar Abas", key="btn_fazer_upload_op3", type="primary")
-
-    # Armazenar estado para controlar exibição após o clique do botão de upload
-    if "executar_config" not in st.session_state:
-        st.session_state["executar_config"] = False
 
     if fazer_upload_btn:
         if uploaded_files:
@@ -574,8 +572,15 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         for f_idx, f in enumerate(uploaded_files):
             file_key = f"{f_idx}_{f.name}"
             f_bytes = f.getvalue()
-            xl = pd.ExcelFile(io.BytesIO(f_bytes))
-            sheets_available = xl.sheet_names
+            file_ext = f.name.split('.')[-1].lower()
+            
+            try:
+                engine_val = 'odf' if file_ext == 'ods' else None
+                xl = pd.ExcelFile(io.BytesIO(f_bytes), engine=engine_val)
+                sheets_available = xl.sheet_names
+            except Exception as e:
+                st.error(f"Erro ao ler o arquivo {f.name}: {e}. Certifique-se de que a biblioteca 'odfpy' está instalada caso utilize arquivos .ods.")
+                continue
 
             pref_sheets = [s for s in sheets_available if any(p in s.strip().upper() for p in ["COM REMUNER", "SEM REMUNER"])]
 
@@ -612,7 +617,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     )
 
                     try:
-                        df_preview = pd.read_excel(io.BytesIO(f_bytes), sheet_name=sheet, header=header_row - 1, nrows=0)
+                        df_preview = pd.read_excel(io.BytesIO(f_bytes), sheet_name=sheet, header=header_row - 1, nrows=0, engine=engine_val)
                         cols_aba = [str(c).strip() for c in df_preview.columns]
                     except:
                         cols_aba = []
@@ -661,17 +666,12 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                 settings[file_key] = sheet_config
 
+        # Rolar automaticamente para o final da página após renderizar as configurações
         components.html(
             """
             <script>
                 setTimeout(function() {
-                    var buttons = window.parent.document.querySelectorAll('button');
-                    for (var i = 0; i < buttons.length; i++) {
-                        if (buttons[i].innerText.includes("Carregar e Consolidar Dados")) {
-                            buttons[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            break;
-                        }
-                    }
+                    window.parent.window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
                 }, 300);
             </script>
             """,
@@ -683,13 +683,19 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             for f_idx, f in enumerate(uploaded_files):
                 file_key = f"{f_idx}_{f.name}"
                 f_bytes = f.getvalue()
-                xl = pd.ExcelFile(io.BytesIO(f_bytes))
-                mes_ano_m9 = extrair_mes_ano_m9(io.BytesIO(f_bytes), xl.sheet_names)
+                file_ext = f.name.split('.')[-1].lower()
+                engine_val = 'odf' if file_ext == 'ods' else None
+                
+                try:
+                    xl = pd.ExcelFile(io.BytesIO(f_bytes), engine=engine_val)
+                    mes_ano_m9 = extrair_mes_ano_m9(io.BytesIO(f_bytes), xl.sheet_names, file_ext)
+                except:
+                    mes_ano_m9 = "SEM MÊS/ANO"
 
                 file_cfg = settings.get(file_key, {})
                 for sheet, cfg in file_cfg.items():
                     try:
-                        df_tmp = pd.read_excel(io.BytesIO(f_bytes), sheet_name=sheet, header=cfg["header_idx"])
+                        df_tmp = pd.read_excel(io.BytesIO(f_bytes), sheet_name=sheet, header=cfg["header_idx"], engine=engine_val)
                         df_tmp.columns = [str(c).strip() for c in df_tmp.columns]
                         df_tmp.columns = deduplicar_colunas(df_tmp.columns)
 
@@ -746,7 +752,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     val_f = row[col_f] if (col_f and col_f in row) else None
                                     is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
 
-                                    cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERAÇÃO"
+                                    cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERACÃO"
                                     letras = ["J", "C", "X", "S", "T", "U", "V"]
 
                                 row_vals = {"Categoria_Aba": cat}
@@ -810,8 +816,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     pos_cols = [c for c in df_grupo.columns if str(c).startswith("POS_")]
                     pos_cols.sort(key=lambda x: int(x.split("_")[1]))
 
-                    # MAPEAMENTO DO CABEÇALHO PADRÃO EXATO SOLICITADO:
-                    # SELECIONAR? | MES/ANO - ABA | NOME | ORGANIZ | FUNÇÃO | ENTRADA | SAIDA | PREV | REAL
                     cabecalhos_padrao = ["MES/ANO - ABA", "NOME", "ORGANIZ", "FUNÇÃO", "ENTRADA", "SAIDA", "PREV", "REAL"]
                     rename_map = {}
                     
@@ -826,7 +830,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                     st.markdown(f"### {titulo_grupo} ({len(df_render)} registro(s))")
 
-                    # Estado da Seleção em Massa
                     key_select = f"select_all_{prefixo_key}"
                     if key_select not in st.session_state:
                         st.session_state[key_select] = False
@@ -841,13 +844,11 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             st.session_state[key_select] = False
                             st.rerun()
 
-                    # Inserção da coluna de seleção no início seguindo o padrão
                     df_render.insert(0, "SELECIONAR?", st.session_state[key_select])
 
                     col_config_conteudo = gerar_config_largura_colunas(df_render, df_render.columns.tolist())
                     col_config_conteudo["SELECIONAR?"] = st.column_config.CheckboxColumn("SELECIONAR?", default=False)
 
-                    # Tabela editável com caixas de seleção
                     df_editado_res = st.data_editor(
                         df_render,
                         column_config=col_config_conteudo,
