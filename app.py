@@ -289,6 +289,7 @@ def gerar_config_largura_colunas(df_subset, colunas):
             config[col] = st.column_config.Column(width=largura_pixels)
             
     return config
+
 # --- MENU PRINCIPAL ---
 menu_opcao = st.sidebar.radio(
     "Selecione a rotina:",
@@ -584,17 +585,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         if uploaded_files:
             st.session_state["executar_config"] = True
             st.success("Arquivos carregados com sucesso! Configure as abas abaixo:")
-            # --- ROLAGEM AUTOMÁTICA PARA O FINAL APÓS CARREGAR ---
-            components.html(
-                """
-                <script>
-                    setTimeout(function() {
-                        window.parent.window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-                    }, 200);
-                </script>
-                """,
-                height=0
-            )
         else:
             st.error("Selecione pelo menos um arquivo antes de fazer o upload.")
             st.session_state["executar_config"] = False
@@ -698,17 +688,25 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                 settings[file_key] = sheet_config
 
-        # Rolar automaticamente para o final da página após renderizar as configurações
+        # =====================================================================
+        # 👇 ROLAGEM AUTOMÁTICA EXATA ATÉ O BOTÃO DE CONSOLIDAR (USANDO ÂNCORA)
+        # =====================================================================
+        st.markdown('<div id="anchor_consolidar"></div>', unsafe_allow_html=True)
+        
         components.html(
             """
             <script>
                 setTimeout(function() {
-                    window.parent.window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-                }, 300);
+                    var target = window.parent.document.getElementById('anchor_consolidar');
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }, 600);
             </script>
             """,
             height=0
         )
+        # =====================================================================
 
         if st.button("🔍 Carregar e Consolidar Dados para Pesquisa", key="btn_consolidar_op3"):
             all_results = []
@@ -788,15 +786,15 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             def extrair_dados_e_categoria(row):
                                 if is_com_remuner:
                                     cat = "COM REMUNERAÇÃO"
-                                    # Aplica a regra com base na data do arquivo
+                                    # Aplica a regra com base na data SOMENTE para COM REMUNER
                                     if usar_padrao_antigo:
-                                        # ALTERAÇÃO SOLICITADA AQUI (I, B, Q, S, T, U, V)
                                         letras = ["I", "B", "Q", "S", "T", "U", "V"]
                                     else:
                                         letras = ["B", "I", "J", "T", "U", "V", "W"]
 
                                 elif is_sem_remuner:
                                     cat = "SEM REMUNERAÇÃO"
+                                    # Fixo para SEM REMUNER, independente de data
                                     letras = ["I", "B", "W", "R", "S", "T", "U"]
 
                                 else:
@@ -840,7 +838,9 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     """
                     <script>
                         setTimeout(function() {
-                            window.parent.window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                            const doc = window.parent.document;
+                            const container = doc.querySelector('section.main') || doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement;
+                            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
                         }, 500);
                     </script>
                     """,
@@ -856,6 +856,17 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.markdown("---")
         st.subheader("🔍 Filtros de Visualização e Busca")
 
+        # Seletor para escolher a ordenação por Mês/Ano (Crescente ou Decrescente)
+        col_ord1, col_ord2 = st.columns([2, 2])
+        with col_ord1:
+            ordem_escolhida = st.radio(
+                "📅 Ordenação por Mês/Ano:",
+                ["Crescente (Antigo ➔ Recente)", "Decrescente (Recente ➔ Antigo)"],
+                horizontal=True
+            )
+        
+        is_ascending = True if "Crescente" in ordem_escolhida else False
+
         nomes_disponiveis = sorted(df_pesq["Nome (Visualização)"].dropna().unique())
         nomes_selecionados = st.multiselect("🔍 Digite para pesquisar e selecione o(s) nome(s):", options=nomes_disponiveis, key="busca_nomes_op3")
 
@@ -867,19 +878,19 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
         if not df_view.empty:
             
-            # === ORDENAÇÃO POR DATA CRESCENTE (MÊS/ANO) ===
+            # === ORDENAÇÃO POR DATA (CRESCENTE OU DECRESCENTE) ===
             def extrair_chave_data(val):
                 try:
                     data_str = str(val).split(' - ')[0].strip()
                     if data_str == "SEM MÊS/ANO":
-                        return 999999 # Joga registros sem data para o final
+                        return 999999 if is_ascending else -1 # Joga registros sem data para o fim dependendo da ordem
                     m, y = data_str.split('/')
                     return int(y) * 100 + int(m) # Ex: "08/2025" vira 202508
                 except:
-                    return 999999
+                    return 999999 if is_ascending else -1
             
             df_view['chave_ordenacao'] = df_view['MÊS/ANO - ABA'].apply(extrair_chave_data)
-            df_view = df_view.sort_values(by=['chave_ordenacao'], ascending=True).drop(columns=['chave_ordenacao'])
+            df_view = df_view.sort_values(by=['chave_ordenacao'], ascending=is_ascending).drop(columns=['chave_ordenacao'])
             # ====================================================
 
             df_display_all = formatar_datas_dataframe(df_view)
@@ -897,7 +908,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     pos_cols.sort(key=lambda x: int(x.split("_")[1]))
 
                     # === CABEÇALHO PADRONIZADO AQUI ===
-                    # As 7 colunas extraídas (letras) vão assumir exatamente esses nomes
                     cabecalhos_padrao = ["NOME", "ORGANIZ", "FUNÇÃO", "ENTRADA", "SAIDA", "PREV", "REAL"]
                     rename_map = {}
                     
