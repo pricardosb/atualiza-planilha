@@ -258,19 +258,19 @@ def gerar_config_largura_colunas(df_subset, colunas):
     config = {}
     for col in colunas:
         if col in df_subset.columns:
-            # Pega o tamanho máximo do texto na coluna ou no próprio título do cabeçalho (o que for maior)
+            # Pega o tamanho máximo do texto na coluna ou no próprio título do cabeçalho
             tamanho_conteudo = df_subset[col].astype(str).str.len().max() if not df_subset[col].empty else 0
             tamanho_titulo = len(str(col))
             max_len = max(tamanho_conteudo, tamanho_titulo)
             
             if pd.isna(max_len):
-                max_len = 10
+                max_len = 5
                 
-            # Calcula a largura aproximada em pixels (ex: 8 a 9 pixels por caractere + margem de 30)
-            largura_pixels = int(max_len * 9) + 30
+            # Cálculo bem justo: ~7 pixels por caractere + apenas 15px de margem interna
+            largura_pixels = int(max_len * 7) + 15
             
-            # Limita a largura entre 80px (mínimo) e 500px (máximo) para não quebrar o visual
-            largura_pixels = max(80, min(largura_pixels, 500))
+            # Não deixa a coluna ficar menor que 40px nem maior que 300px (para não empurrar as outras para fora)
+            largura_pixels = max(40, min(largura_pixels, 300))
             
             config[col] = st.column_config.Column(width=largura_pixels)
             
