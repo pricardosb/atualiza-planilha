@@ -816,7 +816,9 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     pos_cols = [c for c in df_grupo.columns if str(c).startswith("POS_")]
                     pos_cols.sort(key=lambda x: int(x.split("_")[1]))
 
-                    cabecalhos_padrao = ["MES/ANO - ABA", "NOME", "ORGANIZ", "FUNÇÃO", "ENTRADA", "SAIDA", "PREV", "REAL"]
+                    # === CABEÇALHO PADRONIZADO AQUI ===
+                    # As 7 colunas extraídas (letras) vão assumir exatamente esses nomes
+                    cabecalhos_padrao = ["NOME", "ORGANIZ", "FUNÇÃO", "ENTRADA", "SAIDA", "PREV", "REAL"]
                     rename_map = {}
                     
                     for idx_p, pos_col in enumerate(pos_cols):
@@ -825,8 +827,10 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         else:
                             rename_map[pos_col] = f"Campo {idx_p+1}"
 
+                    # Inclui o Mês/Ano (sem o acento para ficar exato como você pediu) antes das outras colunas
                     cols_exibir = ["MÊS/ANO - ABA"] + pos_cols
                     df_render = df_grupo[cols_exibir].rename(columns=rename_map)
+                    df_render = df_render.rename(columns={"MÊS/ANO - ABA": "MES/ANO - ABA"})
 
                     st.markdown(f"### {titulo_grupo} ({len(df_render)} registro(s))")
 
@@ -844,11 +848,13 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             st.session_state[key_select] = False
                             st.rerun()
 
+                    # === INSERE A COLUNA 'SELECIONAR?' NO INÍCIO (POSIÇÃO 0) ===
                     df_render.insert(0, "SELECIONAR?", st.session_state[key_select])
 
                     col_config_conteudo = gerar_config_largura_colunas(df_render, df_render.columns.tolist())
                     col_config_conteudo["SELECIONAR?"] = st.column_config.CheckboxColumn("SELECIONAR?", default=False)
 
+                    # Exibição final da tabela padronizada
                     df_editado_res = st.data_editor(
                         df_render,
                         column_config=col_config_conteudo,
@@ -862,11 +868,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     st.markdown("---")
         else:
             st.info("ℹ️ Nenhum registro selecionado ou encontrado na pesquisa.")
-
-# =============================================================================
-# --- DEMAIS OPÇÕES ---
-# =============================================================================
-elif menu_opcao == "LIMPAR ARQUIVO":
     if st.button("🗑️ Limpar Tudo"):
         st.session_state.clear()
         st.rerun()
