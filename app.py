@@ -543,14 +543,33 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     titulo_estilizado("Pesquisa para Remição")
 
     st.subheader("1. Configuração de Arquivos, Abas e Campos")
-    uploaded_files = st.file_uploader(
-        "Selecione um ou mais arquivos (.xlsx, .xls, .ods)",
-        type=["xlsx", "xls", "ods"],
-        accept_multiple_files=True,
-        key="search_upload"
-    )
+    
+    # DOIS BOTÕES NO INÍCIO: 1 PARA SELECIONAR ARQUIVOS E OUTRO PARA FAZER O UPLOAD
+    col_btn_1, col_btn_2 = st.columns(2)
+    with col_btn_1:
+        uploaded_files = st.file_uploader(
+            "1. Selecione os arquivos (.xlsx, .xls, .ods)",
+            type=["xlsx", "xls", "ods"],
+            accept_multiple_files=True,
+            key="search_upload"
+        )
+    with col_btn_2:
+        st.markdown("<br>", unsafe_allow_html=True) # Espaçamento visual
+        fazer_upload_btn = st.button("2. Fazer Upload e Configurar Abas", key="btn_fazer_upload_op3", type="primary")
 
-    if uploaded_files:
+    # Armazenar estado para controlar exibição após o clique do botão de upload
+    if "executar_config" not in st.session_state:
+        st.session_state["executar_config"] = False
+
+    if fazer_upload_btn:
+        if uploaded_files:
+            st.session_state["executar_config"] = True
+            st.success("Arquivos carregados com sucesso! Configure as abas abaixo:")
+        else:
+            st.error("Selecione pelo menos um arquivo antes de fazer o upload.")
+            st.session_state["executar_config"] = False
+
+    if uploaded_files and st.session_state["executar_config"]:
         settings = {}
         for f_idx, f in enumerate(uploaded_files):
             file_key = f"{f_idx}_{f.name}"
@@ -761,8 +780,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             else:
                 st.warning("Nenhum dado encontrado com as configurações informadas.")
                 st.session_state["pesquisa_df"] = None
-    else:
-        st.session_state["pesquisa_df"] = None
 
     if st.session_state.get("pesquisa_df") is not None:
         df_pesq = st.session_state["pesquisa_df"]
@@ -793,24 +810,16 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     pos_cols = [c for c in df_grupo.columns if str(c).startswith("POS_")]
                     pos_cols.sort(key=lambda x: int(x.split("_")[1]))
 
+                    # MAPEAMENTO DO CABEÇALHO PADRÃO EXATO SOLICITADO:
+                    # SELECIONAR? | MES/ANO - ABA | NOME | ORGANIZ | FUNÇÃO | ENTRADA | SAIDA | PREV | REAL
+                    cabecalhos_padrao = ["MES/ANO - ABA", "NOME", "ORGANIZ", "FUNÇÃO", "ENTRADA", "SAIDA", "PREV", "REAL"]
                     rename_map = {}
-                    for pos_col in pos_cols:
-                        idx_num = pos_col.split("_")[1]
-                        hdr_col = f"HEADER_{idx_num}"
-
-                        hdr_name = None
-                        if hdr_col in df_grupo.columns:
-                            valid_hdrs = df_grupo[hdr_col].dropna().unique()
-                            if len(valid_hdrs) > 0:
-                                hdr_name = str(valid_hdrs[0])
-
-                        if not hdr_name or hdr_name.strip() == "":
-                            hdr_name = f"Campo {int(idx_num)+1}"
-
-                        if hdr_name in rename_map.values():
-                            hdr_name = f"{hdr_name} ({idx_num})"
-
-                        rename_map[pos_col] = hdr_name
+                    
+                    for idx_p, pos_col in enumerate(pos_cols):
+                        if idx_p < len(cabecalhos_padrao):
+                            rename_map[pos_col] = cabecalhos_padrao[idx_p]
+                        else:
+                            rename_map[pos_col] = f"Campo {idx_p+1}"
 
                     cols_exibir = ["MÊS/ANO - ABA"] + pos_cols
                     df_render = df_grupo[cols_exibir].rename(columns=rename_map)
@@ -832,11 +841,11 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             st.session_state[key_select] = False
                             st.rerun()
 
-                    # Inserção da coluna de seleção
-                    df_render.insert(0, "Selecionar?", st.session_state[key_select])
+                    # Inserção da coluna de seleção no início seguindo o padrão
+                    df_render.insert(0, "SELECIONAR?", st.session_state[key_select])
 
                     col_config_conteudo = gerar_config_largura_colunas(df_render, df_render.columns.tolist())
-                    col_config_conteudo["Selecionar?"] = st.column_config.CheckboxColumn("Selecionar?", default=False)
+                    col_config_conteudo["SELECIONAR?"] = st.column_config.CheckboxColumn("SELECIONAR?", default=False)
 
                     # Tabela editável com caixas de seleção
                     df_editado_res = st.data_editor(
@@ -847,7 +856,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         key=f"editor_res_{prefixo_key}"
                     )
 
-                    total_marcados = len(df_editado_res[df_editado_res["Selecionar?"] == True])
+                    total_marcados = len(df_editado_res[df_editado_res["SELECIONAR?"] == True])
                     st.caption(f"📌 **{total_marcados}** item(ns) selecionado(s) nesta tabela.")
                     st.markdown("---")
         else:
