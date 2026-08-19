@@ -604,7 +604,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 st.error(f"Erro ao ler o arquivo {f.name}: {e}. Certifique-se de que a biblioteca 'odfpy' está instalada caso utilize arquivos .ods.")
                 continue
 
-            # Reconhecimento das abas COM REMUNER, SEM REMUNER, DEM_COM e DEM_SEM
             pref_sheets = [s for s in sheets_available if any(p in s.strip().upper() for p in ["COM REMUNER", "SEM REMUNER", "DEM_COM", "DEM_SEM"])]
 
             if pref_sheets:
@@ -813,7 +812,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                 for idx_p, let in enumerate(letras):
                                     if let is None:
                                         val = ""
-                                        header_title = "EM BRANCO"
+                                        header_title = ""
                                     else:
                                         col_n = obter_nome_coluna_por_letra(df_tmp, colunas_originais, let)
                                         val = row[col_n] if col_n and col_n in row else None
@@ -899,6 +898,15 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
             df_display_all = formatar_datas_dataframe(df_view)
 
+            def formatar_sem_decimal(val):
+                if pd.isna(val) or str(val).strip() in ["", "nan", "None"]:
+                    return ""
+                try:
+                    num = float(val)
+                    return str(int(round(num)))
+                except (ValueError, TypeError):
+                    return str(val).strip()
+
             grupos_categorias = [
                 ("🟢 COM REMUNERAÇÃO", "COM REMUNERAÇÃO", "com_rem"),
                 ("🟡 SEM REMUNERAÇÃO", "SEM REMUNERAÇÃO", "sem_rem")
@@ -923,6 +931,9 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     cols_exibir = ["MÊS/ANO - ABA"] + pos_cols
                     df_render = df_grupo[cols_exibir].rename(columns=rename_map)
                     df_render = df_render.rename(columns={"MÊS/ANO - ABA": "MES/ANO - ABA"})
+
+                    if "REAL" in df_render.columns:
+                        df_render["REAL"] = df_render["REAL"].apply(formatar_sem_decimal)
 
                     st.markdown(f"### {titulo_grupo} ({len(df_render)} registro(s))")
 
@@ -987,7 +998,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     if len(parts) == 2:
                                         mes_str, ano_str = parts[0].strip(), parts[1].strip()
                                 
-                                val_real = r_row.get("REAL", "")
+                                val_real = formatar_sem_decimal(r_row.get("REAL", ""))
                                 
                                 matrix_data.append({
                                     "ANO": ano_str,
@@ -1028,3 +1039,4 @@ elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
 
 elif menu_opcao == "SAIR DO SISTEMA":
     st.stop()
+    
