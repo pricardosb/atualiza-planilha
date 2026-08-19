@@ -584,6 +584,17 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         if uploaded_files:
             st.session_state["executar_config"] = True
             st.success("Arquivos carregados com sucesso! Configure as abas abaixo:")
+            # --- ROLAGEM AUTOMÁTICA PARA O FINAL APÓS CARREGAR ---
+            components.html(
+                """
+                <script>
+                    setTimeout(function() {
+                        window.parent.window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                    }, 200);
+                </script>
+                """,
+                height=0
+            )
         else:
             st.error("Selecione pelo menos um arquivo antes de fazer o upload.")
             st.session_state["executar_config"] = False
