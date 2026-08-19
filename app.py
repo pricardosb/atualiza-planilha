@@ -856,6 +856,17 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.markdown("---")
         st.subheader("🔍 Filtros de Visualização e Busca")
 
+        # Seletor para escolher a ordenação por Mês/Ano (Crescente ou Decrescente)
+        col_ord1, col_ord2 = st.columns([2, 2])
+        with col_ord1:
+            ordem_escolhida = st.radio(
+                "📅 Ordenação por Mês/Ano:",
+                ["Crescente (Antigo ➔ Recente)", "Decrescente (Recente ➔ Antigo)"],
+                horizontal=True
+            )
+        
+        is_ascending = True if "Crescente" in ordem_escolhida else False
+
         nomes_disponiveis = sorted(df_pesq["Nome (Visualização)"].dropna().unique())
         nomes_selecionados = st.multiselect("🔍 Digite para pesquisar e selecione o(s) nome(s):", options=nomes_disponiveis, key="busca_nomes_op3")
 
@@ -867,19 +878,19 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
         if not df_view.empty:
             
-            # === ORDENAÇÃO POR DATA CRESCENTE (MÊS/ANO) ===
+            # === ORDENAÇÃO POR DATA (CRESCENTE OU DECRESCENTE) ===
             def extrair_chave_data(val):
                 try:
                     data_str = str(val).split(' - ')[0].strip()
                     if data_str == "SEM MÊS/ANO":
-                        return 999999 # Joga registros sem data para o final
+                        return 999999 if is_ascending else -1 # Joga registros sem data para o fim dependendo da ordem
                     m, y = data_str.split('/')
                     return int(y) * 100 + int(m) # Ex: "08/2025" vira 202508
                 except:
-                    return 999999
+                    return 999999 if is_ascending else -1
             
             df_view['chave_ordenacao'] = df_view['MÊS/ANO - ABA'].apply(extrair_chave_data)
-            df_view = df_view.sort_values(by=['chave_ordenacao'], ascending=True).drop(columns=['chave_ordenacao'])
+            df_view = df_view.sort_values(by=['chave_ordenacao'], ascending=is_ascending).drop(columns=['chave_ordenacao'])
             # ====================================================
 
             df_display_all = formatar_datas_dataframe(df_view)
@@ -897,7 +908,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     pos_cols.sort(key=lambda x: int(x.split("_")[1]))
 
                     # === CABEÇALHO PADRONIZADO AQUI ===
-                    # As 7 colunas extraídas (letras) vão assumir exatamente esses nomes
                     cabecalhos_padrao = ["NOME", "ORGANIZ", "FUNÇÃO", "ENTRADA", "SAIDA", "PREV", "REAL"]
                     rename_map = {}
                     
