@@ -784,11 +784,28 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             is_com_remuner = "COM REMUNER" in aba_upper
                             is_sem_remuner = "SEM REMUNER" in aba_upper
                             col_f = obter_nome_coluna_por_letra(df_tmp, colunas_originais, 'F')
+                            
+                            # --- LÓGICA DE VERIFICAÇÃO DE DATA ---
+                            usar_padrao_antigo = False
+                            if mes_ano_arquivo != "SEM MÊS/ANO":
+                                try:
+                                    mes_str, ano_str = mes_ano_arquivo.split('/')
+                                    mes_val, ano_val = int(mes_str), int(ano_str)
+                                    # Verifica se é anterior a 09/2025
+                                    if ano_val < 2025 or (ano_val == 2025 and mes_val < 9):
+                                        usar_padrao_antigo = True
+                                except Exception:
+                                    pass
+                            # -------------------------------------
 
                             def extrair_dados_e_categoria(row):
                                 if is_com_remuner:
                                     cat = "COM REMUNERAÇÃO"
-                                    letras = ["B", "I", "J", "T", "U", "V", "W"]
+                                    # Aplica a regra com base na data do arquivo
+                                    if usar_padrao_antigo:
+                                        letras = ["I", "B", "W", "R", "S", "T", "U"]
+                                    else:
+                                        letras = ["B", "I", "J", "T", "U", "V", "W"]
 
                                 elif is_sem_remuner:
                                     cat = "SEM REMUNERAÇÃO"
