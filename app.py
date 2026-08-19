@@ -249,30 +249,6 @@ def titulo_estilizado(subtitulo=""):
     )
 
 
-def extrair_mes_ano_m9(file_bytes_io, sheets_available, file_ext):
-    try:
-        target_sheet = None
-        for s in sheets_available:
-            if "COM REMUNER" in s.strip().upper():
-                target_sheet = s
-                break
-        if not target_sheet and sheets_available:
-            target_sheet = sheets_available[0]
-
-        file_bytes_io.seek(0)
-        engine_val = 'odf' if file_ext == 'ods' else None
-        df_cell = pd.read_excel(file_bytes_io, sheet_name=target_sheet, header=None, nrows=9, engine=engine_val)
-        val = df_cell.iloc[8, 12]
-
-        if pd.isna(val) or str(val).strip() == "":
-            return "SEM MÊS/ANO"
-        if isinstance(val, (datetime.datetime, datetime.date)):
-            return val.strftime("%m/%Y")
-        return str(val).strip()
-    except Exception:
-        return "SEM MÊS/ANO"
-
-
 def obter_nome_coluna_por_letra(df, colunas_disponiveis, letra):
     mapa_letras = {
         'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7,
@@ -733,7 +709,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 
                 try:
                     xl = pd.ExcelFile(io.BytesIO(f_bytes), engine=engine_val)
-                    # Agora pegamos o mês/ano usando o próprio nome do arquivo carregado (f.name)
+                    # Pegamos o mês/ano usando o próprio nome do arquivo carregado
                     mes_ano_arquivo = extrair_mes_ano_do_nome(f.name)
                 except:
                     mes_ano_arquivo = "SEM MÊS/ANO"
@@ -803,7 +779,8 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     cat = "COM REMUNERAÇÃO"
                                     # Aplica a regra com base na data do arquivo
                                     if usar_padrao_antigo:
-                                        letras = ["I", "B", "W", "R", "S", "T", "U"]
+                                        # ALTERAÇÃO SOLICITADA AQUI (I, B, Q, S, T, U, V)
+                                        letras = ["I", "B", "Q", "S", "T", "U", "V"]
                                     else:
                                         letras = ["B", "I", "J", "T", "U", "V", "W"]
 
@@ -847,7 +824,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 st.session_state["pesquisa_df"] = pd.concat(all_results, ignore_index=True)
                 st.success(f"Dados consolidados com sucesso! **{len(st.session_state['pesquisa_df'])}** registros carregados.")
                 
-                # --- NOVO: Rolagem automática após consolidar dados ---
+                # --- Rolagem automática após consolidar dados ---
                 components.html(
                     """
                     <script>
@@ -879,7 +856,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
         if not df_view.empty:
             
-            # === NOVO: ORDENAÇÃO POR DATA CRESCENTE (MÊS/ANO) ===
+            # === ORDENAÇÃO POR DATA CRESCENTE (MÊS/ANO) ===
             def extrair_chave_data(val):
                 try:
                     data_str = str(val).split(' - ')[0].strip()
@@ -919,7 +896,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         else:
                             rename_map[pos_col] = f"Campo {idx_p+1}"
 
-                    # Inclui o Mês/Ano (sem o acento para ficar exato como você pediu) antes das outras colunas
+                    # Inclui o Mês/Ano antes das outras colunas
                     cols_exibir = ["MÊS/ANO - ABA"] + pos_cols
                     df_render = df_grupo[cols_exibir].rename(columns=rename_map)
                     df_render = df_render.rename(columns={"MÊS/ANO - ABA": "MES/ANO - ABA"})
