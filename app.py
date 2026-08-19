@@ -9,6 +9,38 @@ from openpyxl.styles import Font
 from copy import copy
 import streamlit.components.v1 as components
 
+def extrair_mes_ano_do_nome(nome_arquivo):
+    import re
+    
+    # Dicionário para converter o nome do mês escrito no arquivo em número
+    meses = {
+        "JANEIRO": "01", "FEVEREIRO": "02", "MARÇO": "03", "MARCO": "03",
+        "ABRIL": "04", "MAIO": "05", "JUNHO": "06", "JULHO": "07",
+        "AGOSTO": "08", "SETEMBRO": "09", "OUTUBRO": "10",
+        "NOVEMBRO": "11", "DEZEMBRO": "12"
+    }
+    
+    nome_upper = str(nome_arquivo).upper()
+    
+    # Procura um ano de 4 dígitos que comece com 20 (ex: 2023, 2024)
+    ano_match = re.search(r'\b(20\d{2})\b', nome_upper)
+    ano = ano_match.group(1) if ano_match else None
+    
+    # Procura o mês correspondente no nome do arquivo
+    mes = None
+    for nome_mes, num_mes in meses.items():
+        if nome_mes in nome_upper:
+            mes = num_mes
+            break
+            
+    # Se achou mês e ano, retorna no formato MM/YYYY
+    if mes and ano:
+        return f"{mes}/{ano}"
+    
+    # Se falhar em achar um dos dois, retorna a mensagem padrão
+    return "SEM MÊS/ANO"
+
+
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="SINALE WEB", layout="wide")
 
@@ -701,9 +733,10 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 
                 try:
                     xl = pd.ExcelFile(io.BytesIO(f_bytes), engine=engine_val)
-                    mes_ano_m9 = extrair_mes_ano_m9(io.BytesIO(f_bytes), xl.sheet_names, file_ext)
+                    # Agora pegamos o mês/ano usando o próprio nome do arquivo carregado (f.name)
+                    mes_ano_arquivo = extrair_mes_ano_do_nome(f.name)
                 except:
-                    mes_ano_m9 = "SEM MÊS/ANO"
+                    mes_ano_arquivo = "SEM MÊS/ANO"
 
                 file_cfg = settings.get(file_key, {})
                 for sheet, cfg in file_cfg.items():
@@ -737,7 +770,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         if target_col and target_col in df_tmp.columns:
                             colunas_originais = list(df_tmp.columns)
 
-                            df_tmp["MÊS/ANO - ABA"] = f"{mes_ano_m9} - {sheet}"
+                            df_tmp["MÊS/ANO - ABA"] = f"{mes_ano_arquivo} - {sheet}"
                             df_tmp["Aba Original"] = sheet
                             df_tmp["Campo Pesquisado"] = target_col
 
