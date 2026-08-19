@@ -258,24 +258,29 @@ def gerar_config_largura_colunas(df_subset, colunas):
     config = {}
     for col in colunas:
         if col in df_subset.columns:
-            # Pega o tamanho máximo do texto na coluna ou no próprio título do cabeçalho
-            tamanho_conteudo = df_subset[col].astype(str).str.len().max() if not df_subset[col].empty else 0
-            tamanho_titulo = len(str(col))
-            max_len = max(tamanho_conteudo, tamanho_titulo)
+            nome_coluna_upper = str(col).strip().upper()
             
-            if pd.isna(max_len):
-                max_len = 5
+            # 1. REGRA PARA A COLUNA "NOME": Tamanho baseado no CONTEÚDO
+            if nome_coluna_upper == "NOME":
+                tamanho_conteudo = df_subset[col].astype(str).str.len().max() if not df_subset[col].empty else 10
+                if pd.isna(tamanho_conteudo):
+                    tamanho_conteudo = 10
                 
-            # Cálculo bem justo: ~7 pixels por caractere + apenas 15px de margem interna
-            largura_pixels = int(max_len * 7) + 15
-            
-            # Não deixa a coluna ficar menor que 40px nem maior que 300px (para não empurrar as outras para fora)
-            largura_pixels = max(40, min(largura_pixels, 300))
+                # ~8 pixels por letra + margem
+                largura_pixels = int(tamanho_conteudo * 8) + 20
+                
+                # Garante que não fique pequena demais nem ocupe a tela inteira sozinha
+                largura_pixels = max(150, min(largura_pixels, 450))
+                
+            # 2. REGRA PARA AS DEMAIS COLUNAS: Tamanho baseado EXCLUSIVAMENTE no CABEÇALHO
+            else:
+                tamanho_titulo = len(str(col))
+                largura_pixels = int(tamanho_titulo * 9) + 20
+                largura_pixels = max(50, largura_pixels)
             
             config[col] = st.column_config.Column(width=largura_pixels)
             
     return config
-
 # --- MENU PRINCIPAL ---
 menu_opcao = st.sidebar.radio(
     "Selecione a rotina:",
