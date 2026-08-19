@@ -788,10 +788,11 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     letras = ["I", "B", "W", "R", "S", "T", "U"]
 
                                 else:
+                                    # Regra para outras abas: ignora o nome da aba e checa o critério 'SIM'
                                     val_f = row[col_f] if (col_f and col_f in row) else None
                                     is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
 
-                                    cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERACÃO"
+                                    cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERAÇÃO"
                                     letras = ["J", "C", "X", "S", "T", "U", "V"]
 
                                 row_vals = {"Categoria_Aba": cat}
@@ -949,13 +950,17 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             
                             dados_salvamento = []
                             for _, r_row in df_nome_sel.iterrows():
+                                # Extrai estritamente MÊS/ANO (ex: '08/2025' de '08/2025 - ABA')
+                                raw_mes_ano_aba = str(r_row.get("MES/ANO - ABA", ""))
+                                data_mes_ano = raw_mes_ano_aba.split(" - ")[0] if " - " in raw_mes_ano_aba else raw_mes_ano_aba
+                                
                                 dados_salvamento.append({
-                                    "DATA": r_row.get("MES/ANO - ABA", ""),
+                                    "DATA": data_mes_ano,
                                     "ORGANIZ": r_row.get("ORGANIZ", ""),
                                     "FUNÇÃO": r_row.get("FUNÇÃO", ""),
                                     "PREV": r_row.get("PREV", ""),
                                     "SAIDA": r_row.get("SAIDA", ""),
-                                    "ABA": r_row.get("MES/ANO - ABA", "").split(" - ")[-1] if " - " in str(r_row.get("MES/ANO - ABA", "")) else ""
+                                    "ABA": cat_key  # "COM REMUNERAÇÃO" ou "SEM REMUNERAÇÃO"
                                 })
                             
                             df_tabela_salvamento = pd.DataFrame(dados_salvamento)
