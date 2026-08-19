@@ -912,6 +912,15 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 ("🟡 SEM REMUNERAÇÃO", "SEM REMUNERAÇÃO", "sem_rem")
             ]
 
+            mapa_meses = {
+                "01": "JAN", "1": "JAN", "02": "FEV", "2": "FEV",
+                "03": "MAR", "3": "MAR", "04": "ABR", "4": "ABR",
+                "05": "MAI", "5": "MAI", "06": "JUN", "6": "JUN",
+                "07": "JUL", "7": "JUL", "08": "AGO", "8": "AGO",
+                "09": "SET", "9": "SET", "10": "OUT", "11": "NOV", "12": "DEZ"
+            }
+            ordem_meses_siglas = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"]
+
             for titulo_grupo, cat_key, prefixo_key in grupos_categorias:
                 df_grupo = df_display_all[df_display_all["Categoria_Aba"] == cat_key]
 
@@ -992,17 +1001,18 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                 raw_mes_ano_aba = str(r_row.get("MES/ANO - ABA", ""))
                                 data_mes_ano = raw_mes_ano_aba.split(" - ")[0] if " - " in raw_mes_ano_aba else raw_mes_ano_aba
                                 
-                                mes_str, ano_str = "N/A", "N/A"
+                                mes_sigla, ano_str = "N/A", "N/A"
                                 if "/" in data_mes_ano:
                                     parts = data_mes_ano.split("/")
                                     if len(parts) == 2:
-                                        mes_str, ano_str = parts[0].strip(), parts[1].strip()
+                                        mes_num, ano_str = parts[0].strip(), parts[1].strip()
+                                        mes_sigla = mapa_meses.get(mes_num, mes_num)
                                 
                                 val_real = formatar_sem_decimal(r_row.get("REAL", ""))
                                 
                                 matrix_data.append({
                                     "ANO": ano_str,
-                                    "MÊS": mes_str,
+                                    "MÊS": mes_sigla,
                                     "REAL": val_real
                                 })
                             
@@ -1016,7 +1026,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     aggfunc=lambda x: " / ".join([str(v) for v in x if pd.notna(v) and str(v).strip() != ""])
                                 ).fillna("")
                                 
-                                cols_meses = sorted(df_pivot.columns, key=lambda m: int(m) if str(m).isdigit() else m)
+                                cols_meses = sorted(df_pivot.columns, key=lambda m: ordem_meses_siglas.index(m) if m in ordem_meses_siglas else 99)
                                 df_pivot = df_pivot[cols_meses]
                                 
                                 st.dataframe(df_pivot, use_container_width=True)
@@ -1039,4 +1049,5 @@ elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
 
 elif menu_opcao == "SAIR DO SISTEMA":
     st.stop()
+    
     
