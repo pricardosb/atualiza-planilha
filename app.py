@@ -289,6 +289,7 @@ def gerar_config_largura_colunas(df_subset, colunas):
             config[col] = st.column_config.Column(width=largura_pixels)
             
     return config
+
 # --- MENU PRINCIPAL ---
 menu_opcao = st.sidebar.radio(
     "Selecione a rotina:",
@@ -584,17 +585,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         if uploaded_files:
             st.session_state["executar_config"] = True
             st.success("Arquivos carregados com sucesso! Configure as abas abaixo:")
-            # --- ROLAGEM AUTOMÁTICA PARA O FINAL APÓS CARREGAR ---
-            components.html(
-                """
-                <script>
-                    setTimeout(function() {
-                        window.parent.window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-                    }, 200);
-                </script>
-                """,
-                height=0
-            )
         else:
             st.error("Selecione pelo menos um arquivo antes de fazer o upload.")
             st.session_state["executar_config"] = False
@@ -698,17 +688,23 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                 settings[file_key] = sheet_config
 
-        # Rolar automaticamente para o final da página após renderizar as configurações
+        # =====================================================================
+        # ROLAGEM AUTOMÁTICA APÓS CARREGAR OS ARQUIVOS E EXPANDERS
+        # =====================================================================
         components.html(
             """
             <script>
                 setTimeout(function() {
-                    window.parent.window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-                }, 300);
+                    const doc = window.parent.document;
+                    // Tenta mirar nos contêineres padrão de rolagem do Streamlit
+                    const container = doc.querySelector('section.main') || doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement;
+                    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                }, 500);
             </script>
             """,
             height=0
         )
+        # =====================================================================
 
         if st.button("🔍 Carregar e Consolidar Dados para Pesquisa", key="btn_consolidar_op3"):
             all_results = []
@@ -788,15 +784,15 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             def extrair_dados_e_categoria(row):
                                 if is_com_remuner:
                                     cat = "COM REMUNERAÇÃO"
-                                    # Aplica a regra com base na data do arquivo
+                                    # Aplica a regra com base na data SOMENTE para COM REMUNER
                                     if usar_padrao_antigo:
-                                        # ALTERAÇÃO SOLICITADA AQUI (I, B, Q, S, T, U, V)
                                         letras = ["I", "B", "Q", "S", "T", "U", "V"]
                                     else:
                                         letras = ["B", "I", "J", "T", "U", "V", "W"]
 
                                 elif is_sem_remuner:
                                     cat = "SEM REMUNERAÇÃO"
+                                    # Fixo para SEM REMUNER, independente de data
                                     letras = ["I", "B", "W", "R", "S", "T", "U"]
 
                                 else:
@@ -840,7 +836,9 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     """
                     <script>
                         setTimeout(function() {
-                            window.parent.window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                            const doc = window.parent.document;
+                            const container = doc.querySelector('section.main') || doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement;
+                            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
                         }, 500);
                     </script>
                     """,
