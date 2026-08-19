@@ -604,7 +604,8 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 st.error(f"Erro ao ler o arquivo {f.name}: {e}. Certifique-se de que a biblioteca 'odfpy' está instalada caso utilize arquivos .ods.")
                 continue
 
-            pref_sheets = [s for s in sheets_available if any(p in s.strip().upper() for p in ["COM REMUNER", "SEM REMUNER"])]
+            # Reconhecimento das abas COM REMUNER, SEM REMUNER, DEM_COM e DEM_SEM
+            pref_sheets = [s for s in sheets_available if any(p in s.strip().upper() for p in ["COM REMUNER", "SEM REMUNER", "DEM_COM", "DEM_SEM"])]
 
             if pref_sheets:
                 default_sheets = pref_sheets
@@ -626,7 +627,11 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     st.markdown(f"**Aba: `{sheet}`**")
 
                     sheet_upper = sheet.strip().upper()
-                    if any(p in sheet_upper for p in ["COM REMUNER", "SEM REMUNER"]):
+                    if "DEM_COM" in sheet_upper:
+                        default_header = 17
+                    elif "DEM_SEM" in sheet_upper:
+                        default_header = 19
+                    elif any(p in sheet_upper for p in ["COM REMUNER", "SEM REMUNER"]):
                         default_header = 11
                     else:
                         default_header = 10 if is_fallback else 11
@@ -761,6 +766,8 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             df_tmp = df_tmp[~df_tmp["NOME_LIMPO"].isin(['', 'NAN', 'NONE', '0', 'NAT', 'NC', 'N/C'])].copy()
 
                             aba_upper = sheet.strip().upper()
+                            is_dem_com = "DEM_COM" in aba_upper
+                            is_dem_sem = "DEM_SEM" in aba_upper
                             is_com_remuner = "COM REMUNER" in aba_upper
                             is_sem_remuner = "SEM REMUNER" in aba_upper
                             col_f = obter_nome_coluna_por_letra(df_tmp, colunas_originais, 'F')
@@ -776,7 +783,15 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     pass
 
                             def extrair_dados_e_categoria(row):
-                                if is_com_remuner:
+                                if is_dem_com:
+                                    cat = "COM REMUNERAÇÃO"
+                                    letras = ["I", "B", None, "S", "T", "U", "V"]
+
+                                elif is_dem_sem:
+                                    cat = "SEM REMUNERAÇÃO"
+                                    letras = ["I", "B", "Y", "S", "T", "U", "V"]
+
+                                elif is_com_remuner:
                                     cat = "COM REMUNERAÇÃO"
                                     if usar_padrao_antigo:
                                         letras = ["I", "B", "Q", "S", "T", "U", "V"]
@@ -796,9 +811,13 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                                 row_vals = {"Categoria_Aba": cat}
                                 for idx_p, let in enumerate(letras):
-                                    col_n = obter_nome_coluna_por_letra(df_tmp, colunas_originais, let)
-                                    val = row[col_n] if col_n and col_n in row else None
-                                    header_title = str(col_n) if col_n else f"Campo {idx_p+1}"
+                                    if let is None:
+                                        val = ""
+                                        header_title = "EM BRANCO"
+                                    else:
+                                        col_n = obter_nome_coluna_por_letra(df_tmp, colunas_originais, let)
+                                        val = row[col_n] if col_n and col_n in row else None
+                                        header_title = str(col_n) if col_n else f"Campo {idx_p+1}"
                                     row_vals[f"POS_{idx_p}"] = val
                                     row_vals[f"HEADER_{idx_p}"] = header_title
 
@@ -945,12 +964,10 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         for nome_interno in nomes_unicos:
                             df_nome_sel = selecionados_grupo[selecionados_grupo["NOME"] == nome_interno]
                             
-                            # Extrai Organização, Função e Saída uma única vez por pessoa
                             organiz_val = ", ".join([str(v) for v in df_nome_sel["ORGANIZ"].dropna().unique() if str(v).strip() != ""])
                             funcao_val = ", ".join([str(v) for v in df_nome_sel["FUNÇÃO"].dropna().unique() if str(v).strip() != ""])
                             saida_val = ", ".join([str(v) for v in df_nome_sel["SAIDA"].dropna().unique() if str(v).strip() != ""])
                             
-                            # Exibe todos os dados do cabeçalho LADO A LADO na mesma linha
                             st.markdown(
                                 f"**NOME:** {nome_interno} &nbsp;|&nbsp; "
                                 f"**ORGANIZAÇÃO:** {organiz_val if organiz_val else 'N/A'} &nbsp;|&nbsp; "
@@ -959,7 +976,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                 f"**SAÍDA:** {saida_val if saida_val else 'N/A'}"
                             )
                             
-                            # Prepara matriz agrupada por ANO (Linhas) e MÊS (Colunas) contendo o valor REAL
                             matrix_data = []
                             for _, r_row in df_nome_sel.iterrows():
                                 raw_mes_ano_aba = str(r_row.get("MES/ANO - ABA", ""))
@@ -982,7 +998,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             if matrix_data:
                                 df_mat = pd.DataFrame(matrix_data)
                                 
-                                # Tabela Dinâmica: Linhas = ANO, Colunas = MÊS, Células = REAL
                                 df_pivot = df_mat.pivot_table(
                                     index="ANO",
                                     columns="MÊS",
@@ -990,7 +1005,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     aggfunc=lambda x: " / ".join([str(v) for v in x if pd.notna(v) and str(v).strip() != ""])
                                 ).fillna("")
                                 
-                                # Ordena as colunas de mês (01, 02, ..., 12)
                                 cols_meses = sorted(df_pivot.columns, key=lambda m: int(m) if str(m).isdigit() else m)
                                 df_pivot = df_pivot[cols_meses]
                                 
