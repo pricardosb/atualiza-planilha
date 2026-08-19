@@ -688,9 +688,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                 settings[file_key] = sheet_config
 
-        # =====================================================================
-        # 👇 ROLAGEM AUTOMÁTICA EXATA ATÉ O BOTÃO DE CONSOLIDAR (USANDO ÂNCORA)
-        # =====================================================================
         st.markdown('<div id="anchor_consolidar"></div>', unsafe_allow_html=True)
         
         components.html(
@@ -706,7 +703,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             """,
             height=0
         )
-        # =====================================================================
 
         if st.button("🔍 Carregar e Consolidar Dados para Pesquisa", key="btn_consolidar_op3"):
             all_results = []
@@ -718,7 +714,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 
                 try:
                     xl = pd.ExcelFile(io.BytesIO(f_bytes), engine=engine_val)
-                    # Pegamos o mês/ano usando o próprio nome do arquivo carregado
                     mes_ano_arquivo = extrair_mes_ano_do_nome(f.name)
                 except:
                     mes_ano_arquivo = "SEM MÊS/ANO"
@@ -770,23 +765,19 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             is_sem_remuner = "SEM REMUNER" in aba_upper
                             col_f = obter_nome_coluna_por_letra(df_tmp, colunas_originais, 'F')
                             
-                            # --- LÓGICA DE VERIFICAÇÃO DE DATA ---
                             usar_padrao_antigo = False
                             if mes_ano_arquivo != "SEM MÊS/ANO":
                                 try:
                                     mes_str, ano_str = mes_ano_arquivo.split('/')
                                     mes_val, ano_val = int(mes_str), int(ano_str)
-                                    # Verifica se é anterior a 09/2025
                                     if ano_val < 2025 or (ano_val == 2025 and mes_val < 9):
                                         usar_padrao_antigo = True
                                 except Exception:
                                     pass
-                            # -------------------------------------
 
                             def extrair_dados_e_categoria(row):
                                 if is_com_remuner:
                                     cat = "COM REMUNERAÇÃO"
-                                    # Aplica a regra com base na data SOMENTE para COM REMUNER
                                     if usar_padrao_antigo:
                                         letras = ["I", "B", "Q", "S", "T", "U", "V"]
                                     else:
@@ -794,7 +785,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                                 elif is_sem_remuner:
                                     cat = "SEM REMUNERAÇÃO"
-                                    # Fixo para SEM REMUNER, independente de data
                                     letras = ["I", "B", "W", "R", "S", "T", "U"]
 
                                 else:
@@ -833,7 +823,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 st.session_state["pesquisa_df"] = pd.concat(all_results, ignore_index=True)
                 st.success(f"Dados consolidados com sucesso! **{len(st.session_state['pesquisa_df'])}** registros carregados.")
                 
-                # --- Rolagem automática após consolidar dados ---
                 components.html(
                     """
                     <script>
@@ -846,7 +835,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     """,
                     height=0
                 )
-                # --------------------------------------------------------
             else:
                 st.warning("Nenhum dado encontrado com as configurações informadas.")
                 st.session_state["pesquisa_df"] = None
@@ -856,7 +844,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.markdown("---")
         st.subheader("🔍 Filtros de Visualização e Busca")
 
-        # Seletor para escolher a ordenação por Mês/Ano (Crescente ou Decrescente)
         col_ord1, col_ord2 = st.columns([2, 2])
         with col_ord1:
             ordem_escolhida = st.radio(
@@ -878,20 +865,18 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
         if not df_view.empty:
             
-            # === ORDENAÇÃO POR DATA (CRESCENTE OU DECRESCENTE) ===
             def extrair_chave_data(val):
                 try:
                     data_str = str(val).split(' - ')[0].strip()
                     if data_str == "SEM MÊS/ANO":
-                        return 999999 if is_ascending else -1 # Joga registros sem data para o fim dependendo da ordem
+                        return 999999 if is_ascending else -1
                     m, y = data_str.split('/')
-                    return int(y) * 100 + int(m) # Ex: "08/2025" vira 202508
+                    return int(y) * 100 + int(m)
                 except:
                     return 999999 if is_ascending else -1
             
             df_view['chave_ordenacao'] = df_view['MÊS/ANO - ABA'].apply(extrair_chave_data)
             df_view = df_view.sort_values(by=['chave_ordenacao'], ascending=is_ascending).drop(columns=['chave_ordenacao'])
-            # ====================================================
 
             df_display_all = formatar_datas_dataframe(df_view)
 
@@ -907,7 +892,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     pos_cols = [c for c in df_grupo.columns if str(c).startswith("POS_")]
                     pos_cols.sort(key=lambda x: int(x.split("_")[1]))
 
-                    # === CABEÇALHO PADRONIZADO AQUI ===
                     cabecalhos_padrao = ["NOME", "ORGANIZ", "FUNÇÃO", "ENTRADA", "SAIDA", "PREV", "REAL"]
                     rename_map = {}
                     
@@ -917,7 +901,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         else:
                             rename_map[pos_col] = f"Campo {idx_p+1}"
 
-                    # Inclui o Mês/Ano antes das outras colunas
                     cols_exibir = ["MÊS/ANO - ABA"] + pos_cols
                     df_render = df_grupo[cols_exibir].rename(columns=rename_map)
                     df_render = df_render.rename(columns={"MÊS/ANO - ABA": "MES/ANO - ABA"})
@@ -938,13 +921,11 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             st.session_state[key_select] = False
                             st.rerun()
 
-                    # === INSERE A COLUNA 'SELECIONAR?' NO INÍCIO (POSIÇÃO 0) ===
                     df_render.insert(0, "SELECIONAR?", st.session_state[key_select])
 
                     col_config_conteudo = gerar_config_largura_colunas(df_render, df_render.columns.tolist())
                     col_config_conteudo["SELECIONAR?"] = st.column_config.CheckboxColumn("SELECIONAR?", default=False)
 
-                    # Exibição final da tabela padronizada
                     df_editado_res = st.data_editor(
                         df_render,
                         column_config=col_config_conteudo,
@@ -953,86 +934,19 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         key=f"editor_res_{prefixo_key}"
                     )
 
-                    total_marcados = len(df_editado_res[df_editado_res["SELECIONAR?"] == True])
-                    st.caption(f"📌 **{total_marcados}** item(ns) selecionado(s) nesta tabela.")
-                    st.markdown("---")
-        else:
-            st.info("ℹ️ Nenhum registro selecionado ou encontrado na pesquisa.")
-    if st.button("🗑️ Limpar Tudo"):
-        st.session_state.clear()
-        st.rerun()
-for titulo_grupo, cat_key, prefixo_key in grupos_categorias:
-                df_grupo = df_display_all[df_display_all["Categoria_Aba"] == cat_key]
-
-                if not df_grupo.empty:
-                    pos_cols = [c for c in df_grupo.columns if str(c).startswith("POS_")]
-                    pos_cols.sort(key=lambda x: int(x.split("_")[1]))
-
-                    # === CABEÇALHO PADRONIZADO AQUI ===
-                    cabecalhos_padrao = ["NOME", "ORGANIZ", "FUNÇÃO", "ENTRADA", "SAIDA", "PREV", "REAL"]
-                    rename_map = {}
-                    
-                    for idx_p, pos_col in enumerate(pos_cols):
-                        if idx_p < len(cabecalhos_padrao):
-                            rename_map[pos_col] = cabecalhos_padrao[idx_p]
-                        else:
-                            rename_map[pos_col] = f"Campo {idx_p+1}"
-
-                    # Inclui o Mês/Ano antes das outras colunas
-                    cols_exibir = ["MÊS/ANO - ABA"] + pos_cols
-                    df_render = df_grupo[cols_exibir].rename(columns=rename_map)
-                    df_render = df_render.rename(columns={"MÊS/ANO - ABA": "MES/ANO - ABA"})
-
-                    st.markdown(f"### {titulo_grupo} ({len(df_render)} registro(s))")
-
-                    key_select = f"select_all_{prefixo_key}"
-                    if key_select not in st.session_state:
-                        st.session_state[key_select] = False
-
-                    col_b1, col_b2, _ = st.columns([1, 1, 4])
-                    with col_b1:
-                        if st.button("✅ Marcar Todos", key=f"btn_marcar_{prefixo_key}"):
-                            st.session_state[key_select] = True
-                            st.rerun()
-                    with col_b2:
-                        if st.button("❌ Desmarcar Todos", key=f"btn_desmarcar_{prefixo_key}"):
-                            st.session_state[key_select] = False
-                            st.rerun()
-
-                    # === INSERE A COLUNA 'SELECIONAR?' NO INÍCIO (POSIÇÃO 0) ===
-                    df_render.insert(0, "SELECIONAR?", st.session_state[key_select])
-
-                    col_config_conteudo = gerar_config_largura_colunas(df_render, df_render.columns.tolist())
-                    col_config_conteudo["SELECIONAR?"] = st.column_config.CheckboxColumn("SELECIONAR?", default=False)
-
-                    # Exibição final da tabela padronizada
-                    df_editado_res = st.data_editor(
-                        df_render,
-                        column_config=col_config_conteudo,
-                        use_container_width=True,
-                        hide_index=True,
-                        key=f"editor_res_{prefixo_key}"
-                    )
-
-                    # --- FILTRAGEM DOS ITENS SELECIONADOS PELO USUÁRIO ---
                     selecionados_grupo = df_editado_res[df_editado_res["SELECIONAR?"] == True]
                     
                     if not selecionados_grupo.empty:
                         st.markdown("---")
                         st.markdown(f"### 💾 Espaço de Dados para Salvamento — {titulo_grupo}")
                         
-                        # Extrai a lista de nomes únicos selecionados
                         nomes_unicos = selecionados_grupo["NOME"].dropna().unique()
                         
                         for nome_interno in nomes_unicos:
-                            # Exibe o NOME uma única vez por bloco
                             st.markdown(f"**NOME:** {nome_interno}")
                             
-                            # Filtra apenas os registros pertencentes a este nome específico neste grupo
                             df_nome_sel = selecionados_grupo[selecionados_grupo["NOME"] == nome_interno]
                             
-                            # Prepara o formato solicitado: DATA, ORGANIZ, FUNÇÃO, PREV, SAIDA, ABA
-                            # Mapeando colunas do df_render para o formato de salvamento desejado
                             dados_salvamento = []
                             for _, r_row in df_nome_sel.iterrows():
                                 dados_salvamento.append({
@@ -1046,7 +960,6 @@ for titulo_grupo, cat_key, prefixo_key in grupos_categorias:
                             
                             df_tabela_salvamento = pd.DataFrame(dados_salvamento)
                             
-                            # Exibe a tabela formatada com o cabeçalho solicitado abaixo do nome
                             st.dataframe(
                                 df_tabela_salvamento[["DATA", "ORGANIZ", "FUNÇÃO", "PREV", "SAIDA", "ABA"]],
                                 use_container_width=True,
@@ -1057,6 +970,12 @@ for titulo_grupo, cat_key, prefixo_key in grupos_categorias:
                     total_marcados = len(selecionados_grupo)
                     st.caption(f"📌 **{total_marcados}** item(ns) selecionado(s) nesta tabela.")
                     st.markdown("---")
+        else:
+            st.info("ℹ️ Nenhum registro selecionado ou encontrado na pesquisa.")
+            
+    if st.button("🗑️ Limpar Tudo", key="btn_limpar_tudo_op3"):
+        st.session_state.clear()
+        st.rerun()
 
 elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
     titulo_estilizado("Filtro de Trabalhadores Ativos")
