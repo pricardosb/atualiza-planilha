@@ -846,6 +846,19 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             if all_results:
                 st.session_state["pesquisa_df"] = pd.concat(all_results, ignore_index=True)
                 st.success(f"Dados consolidados com sucesso! **{len(st.session_state['pesquisa_df'])}** registros carregados.")
+                
+                # --- NOVO: Rolagem automática após consolidar dados ---
+                components.html(
+                    """
+                    <script>
+                        setTimeout(function() {
+                            window.parent.window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                        }, 500);
+                    </script>
+                    """,
+                    height=0
+                )
+                # --------------------------------------------------------
             else:
                 st.warning("Nenhum dado encontrado com as configurações informadas.")
                 st.session_state["pesquisa_df"] = None
@@ -865,6 +878,22 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.metric("Total de Registros Encontrados", len(df_view))
 
         if not df_view.empty:
+            
+            # === NOVO: ORDENAÇÃO POR DATA CRESCENTE (MÊS/ANO) ===
+            def extrair_chave_data(val):
+                try:
+                    data_str = str(val).split(' - ')[0].strip()
+                    if data_str == "SEM MÊS/ANO":
+                        return 999999 # Joga registros sem data para o final
+                    m, y = data_str.split('/')
+                    return int(y) * 100 + int(m) # Ex: "08/2025" vira 202508
+                except:
+                    return 999999
+            
+            df_view['chave_ordenacao'] = df_view['MÊS/ANO - ABA'].apply(extrair_chave_data)
+            df_view = df_view.sort_values(by=['chave_ordenacao'], ascending=True).drop(columns=['chave_ordenacao'])
+            # ====================================================
+
             df_display_all = formatar_datas_dataframe(df_view)
 
             grupos_categorias = [
