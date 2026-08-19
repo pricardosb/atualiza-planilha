@@ -788,7 +788,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     letras = ["I", "B", "W", "R", "S", "T", "U"]
 
                                 else:
-                                    # Regra para outras abas: ignora o nome da aba e checa o critério 'SIM'
                                     val_f = row[col_f] if (col_f and col_f in row) else None
                                     is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
 
@@ -944,32 +943,37 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         nomes_unicos = selecionados_grupo["NOME"].dropna().unique()
                         
                         for nome_interno in nomes_unicos:
-                            st.markdown(f"**NOME:** {nome_interno}")
-                            
                             df_nome_sel = selecionados_grupo[selecionados_grupo["NOME"] == nome_interno]
+                            
+                            # Extrai Organização e Função uma única vez por pessoa
+                            organiz_val = ", ".join([str(v) for v in df_nome_sel["ORGANIZ"].dropna().unique() if str(v).strip() != ""])
+                            funcao_val = ", ".join([str(v) for v in df_nome_sel["FUNÇÃO"].dropna().unique() if str(v).strip() != ""])
+                            
+                            st.markdown(f"**NOME:** {nome_interno}")
+                            st.markdown(f"**ORGANIZAÇÃO:** {organiz_val if organiz_val else 'N/A'}")
+                            st.markdown(f"**FUNÇÃO:** {funcao_val if funcao_val else 'N/A'}")
                             
                             dados_salvamento = []
                             for _, r_row in df_nome_sel.iterrows():
-                                # Extrai estritamente MÊS/ANO (ex: '08/2025' de '08/2025 - ABA')
                                 raw_mes_ano_aba = str(r_row.get("MES/ANO - ABA", ""))
                                 data_mes_ano = raw_mes_ano_aba.split(" - ")[0] if " - " in raw_mes_ano_aba else raw_mes_ano_aba
                                 
                                 dados_salvamento.append({
                                     "DATA": data_mes_ano,
-                                    "ORGANIZ": r_row.get("ORGANIZ", ""),
-                                    "FUNÇÃO": r_row.get("FUNÇÃO", ""),
-                                    "PREV": r_row.get("PREV", ""),
+                                    "REAL": r_row.get("REAL", ""),
                                     "SAIDA": r_row.get("SAIDA", ""),
-                                    "ABA": cat_key  # "COM REMUNERAÇÃO" ou "SEM REMUNERAÇÃO"
+                                    "ABA": cat_key
                                 })
                             
                             df_tabela_salvamento = pd.DataFrame(dados_salvamento)
                             
+                            # Imprime os campos do cabeçalho de todos os itens selecionados
                             st.dataframe(
-                                df_tabela_salvamento[["DATA", "ORGANIZ", "FUNÇÃO", "PREV", "SAIDA", "ABA"]],
+                                df_tabela_salvamento[["DATA", "REAL", "SAIDA", "ABA"]],
                                 use_container_width=True,
                                 hide_index=True
                             )
+                            st.markdown("<br>", unsafe_allow_html=True)
                         st.markdown("---")
 
                     total_marcados = len(selecionados_grupo)
