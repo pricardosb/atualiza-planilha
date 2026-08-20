@@ -9,6 +9,80 @@ from openpyxl.styles import Font
 from copy import copy
 import streamlit.components.v1 as components
 
+# =============================================================================
+# --- FUNÇÕES AUXILIARES DE EXPORTAÇÃO (COLOCAR NO INÍCIO OU ANTES DA OPÇÃO 3) ---
+# =============================================================================
+def gerar_excel_bytes(dados_exportacao):
+    output = io.BytesIO()
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Salvamento Remição"
+
+    for item in dados_exportacao:
+        ws.append([f"NOME: {item['nome']}"])
+        ws.append([f"ORGANIZAÇÃO: {item['organiz']} | FUNÇÃO: {item['funcao']} | REMUNERAÇÃO: {item['remuneracao']} | SAÍDA: {item['saida']}"])
+        ws.append([])
+
+        pivot_df = item['pivot_df']
+        if not pivot_df.empty:
+            headers = ["ANO"] + list(pivot_df.columns)
+            ws.append(headers)
+            for idx_row, row_data in pivot_df.iterrows():
+                row_vals = [str(idx_row)] + [str(v) for v in row_data.values]
+                ws.append(row_vals)
+
+        ws.append([f"Total de Dias: {item['total_dias']}"])
+        ws.append([])
+        ws.append([])
+
+    wb.save(output)
+    return output.getvalue()
+
+
+def gerar_docx_bytes(dados_exportacao):
+    output = io.BytesIO()
+    try:
+        from docx import Document
+        doc = Document()
+        doc.add_heading("Espaço de Dados para Salvamento", level=1)
+
+        for item in dados_exportacao:
+            doc.add_heading(f"NOME: {item['nome']}", level=2)
+            p_meta = doc.add_paragraph()
+            p_meta.add_run(
+                f"ORGANIZAÇÃO: {item['organiz']} | "
+                f"FUNÇÃO: {item['funcao']} | "
+                f"REMUNERAÇÃO: {item['remuneracao']} | "
+                f"SAÍDA: {item['saida']}"
+            )
+
+            pivot_df = item['pivot_df']
+            if not pivot_df.empty:
+                headers = ["ANO"] + list(pivot_df.columns)
+                table = doc.add_table(rows=1, cols=len(headers))
+                table.style = 'Table Grid'
+                
+                hdr_cells = table.rows[0].cells
+                for i, h in enumerate(headers):
+                    hdr_cells[i].text = str(h)
+
+                for idx_row, row_data in pivot_df.iterrows():
+                    row_cells = table.add_row().cells
+                    row_cells[0].text = str(idx_row)
+                    for i, val in enumerate(row_data.values):
+                        row_cells[i+1].text = str(val) if pd.notna(val) else ""
+
+            p_tot = doc.add_paragraph()
+            p_tot.add_run(f"Total de Dias: {item['total_dias']}").bold = True
+            doc.add_paragraph()
+
+        doc.save(output)
+        return output.getvalue()
+    except Exception as e:
+        return f"Erro ao gerar DOCX: {e}".encode('utf-8')
+
+
 def extrair_mes_ano_do_nome(nome_arquivo):
     import re
     
@@ -561,79 +635,6 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
-
-# =============================================================================
-# --- FUNÇÕES AUXILIARES DE EXPORTAÇÃO (COLOCAR NO INÍCIO OU ANTES DA OPÇÃO 3) ---
-# =============================================================================
-def gerar_excel_bytes(dados_exportacao):
-    output = io.BytesIO()
-    import openpyxl
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Salvamento Remição"
-
-    for item in dados_exportacao:
-        ws.append([f"NOME: {item['nome']}"])
-        ws.append([f"ORGANIZAÇÃO: {item['organiz']} | FUNÇÃO: {item['funcao']} | REMUNERAÇÃO: {item['remuneracao']} | SAÍDA: {item['saida']}"])
-        ws.append([])
-
-        pivot_df = item['pivot_df']
-        if not pivot_df.empty:
-            headers = ["ANO"] + list(pivot_df.columns)
-            ws.append(headers)
-            for idx_row, row_data in pivot_df.iterrows():
-                row_vals = [str(idx_row)] + [str(v) for v in row_data.values]
-                ws.append(row_vals)
-
-        ws.append([f"Total de Dias: {item['total_dias']}"])
-        ws.append([])
-        ws.append([])
-
-    wb.save(output)
-    return output.getvalue()
-
-
-def gerar_docx_bytes(dados_exportacao):
-    output = io.BytesIO()
-    try:
-        from docx import Document
-        doc = Document()
-        doc.add_heading("Espaço de Dados para Salvamento", level=1)
-
-        for item in dados_exportacao:
-            doc.add_heading(f"NOME: {item['nome']}", level=2)
-            p_meta = doc.add_paragraph()
-            p_meta.add_run(
-                f"ORGANIZAÇÃO: {item['organiz']} | "
-                f"FUNÇÃO: {item['funcao']} | "
-                f"REMUNERAÇÃO: {item['remuneracao']} | "
-                f"SAÍDA: {item['saida']}"
-            )
-
-            pivot_df = item['pivot_df']
-            if not pivot_df.empty:
-                headers = ["ANO"] + list(pivot_df.columns)
-                table = doc.add_table(rows=1, cols=len(headers))
-                table.style = 'Table Grid'
-                
-                hdr_cells = table.rows[0].cells
-                for i, h in enumerate(headers):
-                    hdr_cells[i].text = str(h)
-
-                for idx_row, row_data in pivot_df.iterrows():
-                    row_cells = table.add_row().cells
-                    row_cells[0].text = str(idx_row)
-                    for i, val in enumerate(row_data.values):
-                        row_cells[i+1].text = str(val) if pd.notna(val) else ""
-
-            p_tot = doc.add_paragraph()
-            p_tot.add_run(f"Total de Dias: {item['total_dias']}").bold = True
-            doc.add_paragraph()
-
-        doc.save(output)
-        return output.getvalue()
-    except Exception as e:
-        return f"Erro ao gerar DOCX: {e}".encode('utf-8')
 
 
 # =============================================================================
