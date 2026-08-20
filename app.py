@@ -660,7 +660,7 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
 
 
 
-# =============================================================================# =============================================================================
+# =============================================================================
 # --- OPÇÃO 3: PESQUISA PARA REMIÇÃO ---
 # =============================================================================
 elif menu_opcao == "PESQUISA PARA REMIÇÃO":
@@ -984,7 +984,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                                 row_vals = {
                                     "Categoria_Aba": cat,
-                                    "LABEL_EXIBICAO": f"{mes_ano_arquivo} - {cat}"
+                                    "LABEL_EXIBICAO": f"{mes_ano_arquivo} - {cat} ({sheet})"
                                 }
                                 for idx_p, let in enumerate(letras):
                                     if let is None:
@@ -1099,7 +1099,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             }
             ordem_meses_siglas = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"]
 
-            # LISTA UNIFICADA PARA GUARDAR TODOS OS DADOS SELECIONADOS
             todos_dados_exportacao = []
 
             for titulo_grupo, cat_key, prefixo_key in grupos_categorias:
@@ -1118,9 +1117,9 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         else:
                             rename_map[pos_col] = f"Campo {idx_p+1}"
 
-                    cols_exibir = ["MÊS/ANO - ABA"] + pos_cols
+                    cols_exibir = ["MÊS/ANO - ABA", "Aba Original"] + pos_cols
                     df_render = df_grupo[cols_exibir].rename(columns=rename_map)
-                    df_render = df_render.rename(columns={"MÊS/ANO - ABA": "MES/ANO - ABA"})
+                    df_render = df_render.rename(columns={"MÊS/ANO - ABA": "MES/ANO - ABA", "Aba Original": "ABA ORIGINAL"})
 
                     if "REAL" in df_render.columns:
                         df_render["REAL"] = df_render["REAL"].apply(formatar_sem_decimal)
@@ -1160,10 +1159,10 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         st.markdown("---")
                         st.markdown(f"### 📋 Espaço de Visualização dos Registros Selecionados — {titulo_grupo}")
                         
-                        nomes_unicos = selecionados_grupo["NOME"].dropna().unique()
+                        # AGRUPA POR NOME E ABA ORIGINAL PARA MANTER VISUALIZAÇÃO SEPARADA POR ABA
+                        grupos_nome_aba = selecionados_grupo.groupby(["NOME", "ABA ORIGINAL"], sort=False)
 
-                        for nome_interno in nomes_unicos:
-                            df_nome_sel = selecionados_grupo[selecionados_grupo["NOME"] == nome_interno]
+                        for (nome_interno, aba_orig), df_nome_sel in grupos_nome_aba:
                             
                             organiz_val = ", ".join([str(v) for v in df_nome_sel["ORGANIZ"].dropna().unique() if str(v).strip() != ""])
                             funcao_val = ", ".join([str(v) for v in df_nome_sel["FUNÇÃO"].dropna().unique() if str(v).strip() != ""])
@@ -1174,6 +1173,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                             st.markdown(
                                 f"**NOME:** {nome_interno} &nbsp;|&nbsp; "
+                                f"**ABA:** `{aba_orig}` &nbsp;|&nbsp; "
                                 f"**ORGANIZAÇÃO:** {organiz_val if organiz_val else 'N/A'} &nbsp;|&nbsp; "
                                 f"**FUNÇÃO:** {funcao_val if funcao_val else 'N/A'} &nbsp;|&nbsp; "
                                 f"**REMUNERAÇÃO:** {cat_key} &nbsp;|&nbsp; "
@@ -1219,9 +1219,9 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             st.markdown(f"**Total de Dias:** {total_dias_nome}")
                             st.markdown("<br>", unsafe_allow_html=True)
 
-                            # ADICIONA OS DADOS NA LISTA UNIFICADA
                             todos_dados_exportacao.append({
                                 "nome": nome_interno,
+                                "aba": aba_orig,
                                 "organiz": organiz_val if organiz_val else "N/A",
                                 "funcao": funcao_val if funcao_val else "N/A",
                                 "remuneracao": cat_key,
@@ -1235,11 +1235,11 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         st.markdown("---")
 
             # =================================================================
-            # BLOCO ÚNICO DE DOWNLOAD (CONSOLIDA AMBAS AS CATEGORIAS)
+            # BLOCO ÚNICO DE DOWNLOAD (CONSOLIDA AMBAS AS CATEGORIAS SEPARADAS POR ABA)
             # =================================================================
             if todos_dados_exportacao:
                 st.markdown("### 📥 Baixar Relatório Unificado (Todos os Selecionados)")
-                st.info(f"O relatório gerado conterá **{len(todos_dados_exportacao)}** registro(s) selecionado(s) nas tabelas acima.")
+                st.info(f"O relatório gerado conterá **{len(todos_dados_exportacao)}** registro(s)/aba(s) selecionado(s) nas tabelas acima.")
 
                 col_dl1, col_dl2 = st.columns(2)
                 
