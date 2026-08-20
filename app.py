@@ -561,6 +561,81 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
+
+# =============================================================================
+# --- FUNÇÕES AUXILIARES DE EXPORTAÇÃO (COLOCAR NO INÍCIO OU ANTES DA OPÇÃO 3) ---
+# =============================================================================
+def gerar_excel_bytes(dados_exportacao):
+    output = io.BytesIO()
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Salvamento Remição"
+
+    for item in dados_exportacao:
+        ws.append([f"NOME: {item['nome']}"])
+        ws.append([f"ORGANIZAÇÃO: {item['organiz']} | FUNÇÃO: {item['funcao']} | REMUNERAÇÃO: {item['remuneracao']} | SAÍDA: {item['saida']}"])
+        ws.append([])
+
+        pivot_df = item['pivot_df']
+        if not pivot_df.empty:
+            headers = ["ANO"] + list(pivot_df.columns)
+            ws.append(headers)
+            for idx_row, row_data in pivot_df.iterrows():
+                row_vals = [str(idx_row)] + [str(v) for v in row_data.values]
+                ws.append(row_vals)
+
+        ws.append([f"Total de Dias: {item['total_dias']}"])
+        ws.append([])
+        ws.append([])
+
+    wb.save(output)
+    return output.getvalue()
+
+
+def gerar_docx_bytes(dados_exportacao):
+    output = io.BytesIO()
+    try:
+        from docx import Document
+        doc = Document()
+        doc.add_heading("Espaço de Dados para Salvamento", level=1)
+
+        for item in dados_exportacao:
+            doc.add_heading(f"NOME: {item['nome']}", level=2)
+            p_meta = doc.add_paragraph()
+            p_meta.add_run(
+                f"ORGANIZAÇÃO: {item['organiz']} | "
+                f"FUNÇÃO: {item['funcao']} | "
+                f"REMUNERAÇÃO: {item['remuneracao']} | "
+                f"SAÍDA: {item['saida']}"
+            )
+
+            pivot_df = item['pivot_df']
+            if not pivot_df.empty:
+                headers = ["ANO"] + list(pivot_df.columns)
+                table = doc.add_table(rows=1, cols=len(headers))
+                table.style = 'Table Grid'
+                
+                hdr_cells = table.rows[0].cells
+                for i, h in enumerate(headers):
+                    hdr_cells[i].text = str(h)
+
+                for idx_row, row_data in pivot_df.iterrows():
+                    row_cells = table.add_row().cells
+                    row_cells[0].text = str(idx_row)
+                    for i, val in enumerate(row_data.values):
+                        row_cells[i+1].text = str(val) if pd.notna(val) else ""
+
+            p_tot = doc.add_paragraph()
+            p_tot.add_run(f"Total de Dias: {item['total_dias']}").bold = True
+            doc.add_paragraph()
+
+        doc.save(output)
+        return output.getvalue()
+    except Exception as e:
+        return f"Erro ao gerar DOCX: {e}".encode('utf-8')
+
+
 # =============================================================================
 # --- OPÇÃO 3: PESQUISA PARA REMIÇÃO ---
 # =============================================================================
@@ -577,6 +652,10 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             accept_multiple_files=True,
             key="search_upload"
         )
+    
+    qtd_arquivos = len(uploaded_files) if uploaded_files else 0
+    st.info(f"📊 **Quantidade de arquivos selecionados:** {qtd_arquivos}")
+
     with col_btn_2:
         st.markdown("<br>", unsafe_allow_html=True)
         fazer_upload_btn = st.button("2. Fazer Upload e Configurar Abas", key="btn_fazer_upload_op3", type="primary")
@@ -920,6 +999,13 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 except (ValueError, TypeError):
                     return str(val).strip()
 
+            def conv_num(val):
+                try:
+                    v_str = str(val).replace(',', '.').strip()
+                    return float(v_str) if v_str not in ["", "nan", "None"] else 0.0
+                except:
+                    return 0.0
+
             grupos_categorias = [
                 ("🟢 COM REMUNERAÇÃO", "COM REMUNERAÇÃO", "com_rem"),
                 ("🟡 SEM REMUNERAÇÃO", "SEM REMUNERAÇÃO", "sem_rem")
@@ -993,7 +1079,8 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         st.markdown(f"### 💾 Espaço de Dados para Salvamento — {titulo_grupo}")
                         
                         nomes_unicos = selecionados_grupo["NOME"].dropna().unique()
-                        
+                        dados_exportacao_grupo = []
+
                         for nome_interno in nomes_unicos:
                             df_nome_sel = selecionados_grupo[selecionados_grupo["NOME"] == nome_interno]
                             
@@ -1001,6 +1088,9 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             funcao_val = ", ".join([str(v) for v in df_nome_sel["FUNÇÃO"].dropna().unique() if str(v).strip() != ""])
                             saida_val = ", ".join([str(v) for v in df_nome_sel["SAIDA"].dropna().unique() if str(v).strip() != ""])
                             
+                            soma_real = sum(conv_num(v) for v in df_nome_sel["REAL"])
+                            total_dias_nome = int(round(soma_real))
+
                             st.markdown(
                                 f"**NOME:** {nome_interno} &nbsp;|&nbsp; "
                                 f"**ORGANIZAÇÃO:** {organiz_val if organiz_val else 'N/A'} &nbsp;|&nbsp; "
@@ -1029,6 +1119,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     "REAL": val_real
                                 })
                             
+                            df_pivot = pd.DataFrame()
                             if matrix_data:
                                 df_mat = pd.DataFrame(matrix_data)
                                 
@@ -1044,12 +1135,46 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                 
                                 st.dataframe(df_pivot, use_container_width=True)
                             
+                            st.markdown(f"**Total de Dias:** {total_dias_nome}")
                             st.markdown("<br>", unsafe_allow_html=True)
-                        st.markdown("---")
 
-                    total_marcados = len(selecionados_grupo)
-                    st.caption(f"📌 **{total_marcados}** item(ns) selecionado(s) nesta tabela.")
-                    st.markdown("---")
+                            dados_exportacao_grupo.append({
+                                "nome": nome_interno,
+                                "organiz": organiz_val if organiz_val else "N/A",
+                                "funcao": funcao_val if funcao_val else "N/A",
+                                "remuneracao": cat_key,
+                                "saida": saida_val if saida_val else "N/A",
+                                "pivot_df": df_pivot,
+                                "total_dias": total_dias_nome
+                            })
+
+                        if dados_exportacao_grupo:
+                            st.markdown("#### 📥 Baixar Relatório do Salvamento")
+                            col_dl1, col_dl2 = st.columns(2)
+                            
+                            excel_bytes = gerar_excel_bytes(dados_exportacao_grupo)
+                            with col_dl1:
+                                st.download_button(
+                                    label="📊 Baixar Excel (.xlsx)",
+                                    data=excel_bytes,
+                                    file_name=f"salvamento_remicao_{prefixo_key}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    key=f"btn_dl_xlsx_{prefixo_key}"
+                                )
+                            
+                            docx_bytes = gerar_docx_bytes(dados_exportacao_grupo)
+                            with col_dl2:
+                                st.download_button(
+                                    label="📄 Baixar Word (.docx)",
+                                    data=docx_bytes,
+                                    file_name=f"salvamento_remicao_{prefixo_key}.docx",
+                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                    key=f"btn_dl_docx_{prefixo_key}"
+                                )
+
+                        total_marcados = len(selecionados_grupo)
+                        st.caption(f"📌 **{total_marcados}** item(ns) selecionado(s) nesta tabela.")
+                        st.markdown("---")
         else:
             st.info("ℹ️ Nenhum registro selecionado ou encontrado na pesquisa.")
             
@@ -1061,4 +1186,5 @@ elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
     titulo_estilizado("Filtro de Trabalhadores Ativos")
 
 elif menu_opcao == "SAIR DO SISTEMA":
-    st.stop()    
+    st.stop()
+    
