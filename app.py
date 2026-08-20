@@ -687,7 +687,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     if fazer_upload_btn:
         if uploaded_files:
             st.session_state["executar_config"] = True
-            st.session_state["rolar_apos_upload"] = True  # Sinaliza para rolar apenas neste clique
+            st.session_state["rolar_apos_upload"] = True  # Sinaliza para rolar até o botão consolidar
             st.success("Arquivos carregados com sucesso! Configure as abas abaixo:")
         else:
             st.error("Selecione pelo menos um arquivo antes de fazer o upload.")
@@ -797,23 +797,31 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                 settings[file_key] = sheet_config
 
-        # --- EXECUTA A ROLAGEM SUAVE SOMENTE SE O BOTAO DE UPLOAD FOI CLICADO ---
+        # Botão principal de consolidação dos dados
+        btn_consolidar = st.button("🔍 Carregar e Consolidar Dados para Pesquisa", key="btn_consolidar_op3", type="primary")
+
+        # --- EXECUTA A ROLAGEM SUAVE ATÉ O FINAL DA PÁGINA APÓS O CLIQUE NO BOTAO 2 ---
         if st.session_state.get("rolar_apos_upload"):
             components.html(
                 """
                 <script>
-                    setTimeout(function() {
+                    function rolarAteOFinal() {
                         const doc = window.parent.document;
-                        const container = doc.querySelector('section.main') || doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement;
-                        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-                    }, 400);
+                        const container = doc.querySelector('section.main') || doc.querySelector('[data-testid="stMain"]') || doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement;
+                        if (container) {
+                            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                        }
+                    }
+                    // Duplo temporizador para garantir que o scroll ocorra mesmo após a expansão dos menus de configuração
+                    setTimeout(rolarAteOFinal, 400);
+                    setTimeout(rolarAteOFinal, 800);
                 </script>
                 """,
                 height=0
             )
-            st.session_state["rolar_apos_upload"] = False  # Reseta o sinalizador para não rolar novamente em re-execuções
+            st.session_state["rolar_apos_upload"] = False  # Reseta a trava
 
-        if st.button("🔍 Carregar e Consolidar Dados para Pesquisa", key="btn_consolidar_op3"):
+        if btn_consolidar:
             all_results = []
             for f_idx, f in enumerate(uploaded_files):
                 file_key = f"{f_idx}_{f.name}"
@@ -877,24 +885,23 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             
                             usar_padrao_antigo = False
                             usar_dem_sem_antigo = False
-                            
-                            # VARIÁVEIS PARA AS NOVAS REGRAS DE 2023
+
                             is_03_a_05_2023 = False
                             is_06_a_07_2023 = False
+                            is_08_2023 = False
 
                             if mes_ano_arquivo != "SEM MÊS/ANO":
                                 try:
                                     mes_str, ano_str = mes_ano_arquivo.split('/')
                                     mes_val, ano_val = int(mes_str), int(ano_str)
                                     
-                                    # Checagem das novas regras (Março a Maio 2023)
                                     if ano_val == 2023 and mes_val in [3, 4, 5]:
                                         is_03_a_05_2023 = True
-                                    # Checagem das novas regras (Junho e Julho 2023)
                                     elif ano_val == 2023 and mes_val in [6, 7]:
                                         is_06_a_07_2023 = True
+                                    elif ano_val == 2023 and mes_val == 8:
+                                        is_08_2023 = True
 
-                                    # Regras legadas existentes
                                     if ano_val < 2025 or (ano_val == 2025 and mes_val < 9):
                                         usar_padrao_antigo = True
 
@@ -904,10 +911,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     pass
 
                             def extrair_dados_e_categoria(row):
-                                
-                                # ==========================================
-                                # REGRAS ESPECÍFICAS DE 2023
-                                # ==========================================
                                 if is_03_a_05_2023:
                                     if is_dem_com or is_com_remuner:
                                         cat = "COM REMUNERAÇÃO"
@@ -915,7 +918,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     elif is_dem_sem or is_sem_remuner:
                                         cat = "SEM REMUNERAÇÃO"
                                         letras = ["J", "B", "S", "U", "V", "W", "X"]
-                                    else: # Fallback para abas com nomes fora do padrão
+                                    else:
                                         val_f = row[col_f] if (col_f and col_f in row) else None
                                         is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
                                         cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERAÇÃO"
@@ -928,15 +931,25 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     elif is_dem_sem or is_sem_remuner:
                                         cat = "SEM REMUNERAÇÃO"
                                         letras = ["J", "B", "S", "V", "W", "X", "Y"]
-                                    else: # Fallback para abas com nomes fora do padrão
+                                    else:
                                         val_f = row[col_f] if (col_f and col_f in row) else None
                                         is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
                                         cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERAÇÃO"
                                         letras = ["I", "B", "U", "W", "X", "Y", "Z"] if is_sim else ["J", "B", "S", "V", "W", "X", "Y"]
 
-                                # ==========================================
-                                # REGRAS PADRÃO (Para os demais meses/anos)
-                                # ==========================================
+                                elif is_08_2023:
+                                    if is_dem_com or is_com_remuner:
+                                        cat = "COM REMUNERAÇÃO"
+                                        letras = ["I", "B", "R", "T", "U", "V", "W"]
+                                    elif is_dem_sem or is_sem_remuner:
+                                        cat = "SEM REMUNERAÇÃO"
+                                        letras = ["I", "B", "Q", "S", "T", "U", "V"]
+                                    else:
+                                        val_f = row[col_f] if (col_f and col_f in row) else None
+                                        is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
+                                        cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERAÇÃO"
+                                        letras = ["I", "B", "R", "T", "U", "V", "W"] if is_sim else ["I", "B", "Q", "S", "T", "U", "V"]
+
                                 else:
                                     if is_dem_com:
                                         cat = "COM REMUNERAÇÃO"
@@ -1240,4 +1253,3 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     if st.button("🗑️ Limpar Tudo", key="btn_limpar_tudo_op3"):
         st.session_state.clear()
         st.rerun()
-        
