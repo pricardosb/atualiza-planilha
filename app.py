@@ -1,20 +1,43 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import re
 import io
 import datetime
 import calendar
+import openpyxl
 from openpyxl import load_workbook
 from openpyxl.styles import Font
 from copy import copy
 import streamlit.components.v1 as components
 
+def tentar_converter_numero(val):
+    """Converte texto numérico em int/float nativo para o Excel reconhecer como número."""
+    if pd.isna(val) or val == "" or val is None:
+        return ""
+    if isinstance(val, (int, float)):
+        return val
+    val_str = str(val).strip().replace(',', '.')
+    try:
+        num = float(val_str)
+        return int(num) if num.is_integer() else num
+    except (ValueError, TypeError):
+        return str(val)
+
+def limpar_texto_xml(texto):
+    """Remove caracteres inválidos de controle ASCII que corrompem documentos Word (.docx)."""
+    if pd.isna(texto) or texto is None:
+        return ""
+    texto_str = str(texto)
+    return re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F]', '', texto_str)
+
+
 # =============================================================================
-# --- FUNÇÕES AUXILIARES DE EXPORTAÇÃO (COLOCAR NO INÍCIO OU ANTES DA OPÇÃO 3) ---
+# --- FUNÇÕES DE EXPORTAÇÃO CORRIGIDAS ---
 # =============================================================================
+
 def gerar_excel_bytes(dados_exportacao):
     output = io.BytesIO()
-    import openpyxl
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Salvamento Remição"
@@ -29,10 +52,11 @@ def gerar_excel_bytes(dados_exportacao):
             headers = ["ANO"] + list(pivot_df.columns)
             ws.append(headers)
             for idx_row, row_data in pivot_df.iterrows():
-                row_vals = [str(idx_row)] + [str(v) for v in row_data.values]
+                # Converte dinamicamente para número real no Excel
+                row_vals = [tentar_converter_numero(idx_row)] + [tentar_converter_numero(v) for v in row_data.values]
                 ws.append(row_vals)
 
-        ws.append([f"Total de Dias: {item['total_dias']}"])
+        ws.append(["Total de Dias:", tentar_converter_numero(item['total_dias'])])
         ws.append([])
         ws.append([])
 
@@ -42,46 +66,45 @@ def gerar_excel_bytes(dados_exportacao):
 
 def gerar_docx_bytes(dados_exportacao):
     output = io.BytesIO()
-    try:
-        from docx import Document
-        doc = Document()
-        doc.add_heading("Espaço de Dados para Salvamento", level=1)
+    from docx import Document
+    
+    doc = Document()
+    doc.add_heading("Espaço de Dados para Salvamento", level=1)
 
-        for item in dados_exportacao:
-            doc.add_heading(f"NOME: {item['nome']}", level=2)
-            p_meta = doc.add_paragraph()
-            p_meta.add_run(
+    for item in dados_exportacao:
+        doc.add_heading(limpar_texto_xml(f"NOME: {item['nome']}"), level=2)
+        p_meta = doc.add_paragraph()
+        p_meta.add_run(
+            limpar_texto_xml(
                 f"ORGANIZAÇÃO: {item['organiz']} | "
                 f"FUNÇÃO: {item['funcao']} | "
                 f"REMUNERAÇÃO: {item['remuneracao']} | "
                 f"SAÍDA: {item['saida']}"
             )
+        )
 
-            pivot_df = item['pivot_df']
-            if not pivot_df.empty:
-                headers = ["ANO"] + list(pivot_df.columns)
-                table = doc.add_table(rows=1, cols=len(headers))
-                table.style = 'Table Grid'
-                
-                hdr_cells = table.rows[0].cells
-                for i, h in enumerate(headers):
-                    hdr_cells[i].text = str(h)
+        pivot_df = item['pivot_df']
+        if not pivot_df.empty:
+            headers = ["ANO"] + list(pivot_df.columns)
+            table = doc.add_table(rows=1, cols=len(headers))
+            table.style = 'Table Grid'
+            
+            hdr_cells = table.rows[0].cells
+            for i, h in enumerate(headers):
+                hdr_cells[i].text = limpar_texto_xml(h)
 
-                for idx_row, row_data in pivot_df.iterrows():
-                    row_cells = table.add_row().cells
-                    row_cells[0].text = str(idx_row)
-                    for i, val in enumerate(row_data.values):
-                        row_cells[i+1].text = str(val) if pd.notna(val) else ""
+            for idx_row, row_data in pivot_df.iterrows():
+                row_cells = table.add_row().cells
+                row_cells[0].text = limpar_texto_xml(idx_row)
+                for i, val in enumerate(row_data.values):
+                    row_cells[i+1].text = limpar_texto_xml(val)
 
-            p_tot = doc.add_paragraph()
-            p_tot.add_run(f"Total de Dias: {item['total_dias']}").bold = True
-            doc.add_paragraph()
+        p_tot = doc.add_paragraph()
+        p_tot.add_run(limpar_texto_xml(f"Total de Dias: {item['total_dias']}")).bold = True
+        doc.add_paragraph()
 
-        doc.save(output)
-        return output.getvalue()
-    except Exception as e:
-        return f"Erro ao gerar DOCX: {e}".encode('utf-8')
-
+    doc.save(output)
+    return output.getvalue()
 
 def extrair_mes_ano_do_nome(nome_arquivo):
     import re
@@ -664,12 +687,14 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     if fazer_upload_btn:
         if uploaded_files:
             st.session_state["executar_config"] = True
+            st.session_state["rolar_apos_upload"] = True  # Sinaliza para rolar até o botão consolidar
             st.success("Arquivos carregados com sucesso! Configure as abas abaixo:")
         else:
             st.error("Selecione pelo menos um arquivo antes de fazer o upload.")
             st.session_state["executar_config"] = False
+            st.session_state["rolar_apos_upload"] = False
 
-    if uploaded_files and st.session_state["executar_config"]:
+    if uploaded_files and st.session_state.get("executar_config"):
         settings = {}
         for f_idx, f in enumerate(uploaded_files):
             file_key = f"{f_idx}_{f.name}"
@@ -772,23 +797,31 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                 settings[file_key] = sheet_config
 
-        st.markdown('<div id="anchor_consolidar"></div>', unsafe_allow_html=True)
-        
-        components.html(
-            """
-            <script>
-                setTimeout(function() {
-                    var target = window.parent.document.getElementById('anchor_consolidar');
-                    if (target) {
-                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
-                }, 600);
-            </script>
-            """,
-            height=0
-        )
+        # Botão principal de consolidação dos dados
+        btn_consolidar = st.button("🔍 Carregar e Consolidar Dados para Pesquisa", key="btn_consolidar_op3", type="primary")
 
-        if st.button("🔍 Carregar e Consolidar Dados para Pesquisa", key="btn_consolidar_op3"):
+        # --- EXECUTA A ROLAGEM SUAVE ATÉ O FINAL DA PÁGINA APÓS O CLIQUE NO BOTAO 2 ---
+        if st.session_state.get("rolar_apos_upload"):
+            components.html(
+                """
+                <script>
+                    function rolarAteOFinal() {
+                        const doc = window.parent.document;
+                        const container = doc.querySelector('section.main') || doc.querySelector('[data-testid="stMain"]') || doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement;
+                        if (container) {
+                            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                        }
+                    }
+                    // Duplo temporizador para garantir que o scroll ocorra mesmo após a expansão dos menus de configuração
+                    setTimeout(rolarAteOFinal, 400);
+                    setTimeout(rolarAteOFinal, 800);
+                </script>
+                """,
+                height=0
+            )
+            st.session_state["rolar_apos_upload"] = False  # Reseta a trava
+
+        if btn_consolidar:
             all_results = []
             for f_idx, f in enumerate(uploaded_files):
                 file_key = f"{f_idx}_{f.name}"
@@ -853,11 +886,22 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             usar_padrao_antigo = False
                             usar_dem_sem_antigo = False
 
+                            is_03_a_05_2023 = False
+                            is_06_a_07_2023 = False
+                            is_08_2023 = False
+
                             if mes_ano_arquivo != "SEM MÊS/ANO":
                                 try:
                                     mes_str, ano_str = mes_ano_arquivo.split('/')
                                     mes_val, ano_val = int(mes_str), int(ano_str)
                                     
+                                    if ano_val == 2023 and mes_val in [3, 4, 5]:
+                                        is_03_a_05_2023 = True
+                                    elif ano_val == 2023 and mes_val in [6, 7]:
+                                        is_06_a_07_2023 = True
+                                    elif ano_val == 2023 and mes_val == 8:
+                                        is_08_2023 = True
+
                                     if ano_val < 2025 or (ano_val == 2025 and mes_val < 9):
                                         usar_padrao_antigo = True
 
@@ -867,34 +911,74 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     pass
 
                             def extrair_dados_e_categoria(row):
-                                if is_dem_com:
-                                    cat = "COM REMUNERAÇÃO"
-                                    letras = ["I", "B", None, "S", "T", "U", "V"]
-
-                                elif is_dem_sem:
-                                    cat = "SEM REMUNERAÇÃO"
-                                    if usar_dem_sem_antigo:
-                                        letras = ["I", "B", "Y", "R", "S", "T", "U"]
+                                if is_03_a_05_2023:
+                                    if is_dem_com or is_com_remuner:
+                                        cat = "COM REMUNERAÇÃO"
+                                        letras = ["I", "B", "T", "V", "W", "X", "Y"]
+                                    elif is_dem_sem or is_sem_remuner:
+                                        cat = "SEM REMUNERAÇÃO"
+                                        letras = ["J", "B", "S", "U", "V", "W", "X"]
                                     else:
-                                        letras = ["I", "B", "Y", "S", "T", "U", "V"]
+                                        val_f = row[col_f] if (col_f and col_f in row) else None
+                                        is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
+                                        cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERAÇÃO"
+                                        letras = ["I", "B", "T", "V", "W", "X", "Y"] if is_sim else ["J", "B", "S", "U", "V", "W", "X"]
+                                        
+                                elif is_06_a_07_2023:
+                                    if is_dem_com or is_com_remuner:
+                                        cat = "COM REMUNERAÇÃO"
+                                        letras = ["I", "B", "U", "W", "X", "Y", "Z"]
+                                    elif is_dem_sem or is_sem_remuner:
+                                        cat = "SEM REMUNERAÇÃO"
+                                        letras = ["J", "B", "S", "V", "W", "X", "Y"]
+                                    else:
+                                        val_f = row[col_f] if (col_f and col_f in row) else None
+                                        is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
+                                        cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERAÇÃO"
+                                        letras = ["I", "B", "U", "W", "X", "Y", "Z"] if is_sim else ["J", "B", "S", "V", "W", "X", "Y"]
 
-                                elif is_com_remuner:
-                                    cat = "COM REMUNERAÇÃO"
-                                    if usar_padrao_antigo:
+                                elif is_08_2023:
+                                    if is_dem_com or is_com_remuner:
+                                        cat = "COM REMUNERAÇÃO"
+                                        letras = ["I", "B", "R", "T", "U", "V", "W"]
+                                    elif is_dem_sem or is_sem_remuner:
+                                        cat = "SEM REMUNERAÇÃO"
                                         letras = ["I", "B", "Q", "S", "T", "U", "V"]
                                     else:
-                                        letras = ["B", "I", "J", "T", "U", "V", "W"]
-
-                                elif is_sem_remuner:
-                                    cat = "SEM REMUNERAÇÃO"
-                                    letras = ["I", "B", "W", "R", "S", "T", "U"]
+                                        val_f = row[col_f] if (col_f and col_f in row) else None
+                                        is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
+                                        cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERAÇÃO"
+                                        letras = ["I", "B", "R", "T", "U", "V", "W"] if is_sim else ["I", "B", "Q", "S", "T", "U", "V"]
 
                                 else:
-                                    val_f = row[col_f] if (col_f and col_f in row) else None
-                                    is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
+                                    if is_dem_com:
+                                        cat = "COM REMUNERAÇÃO"
+                                        letras = ["I", "B", None, "S", "T", "U", "V"]
 
-                                    cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERAÇÃO"
-                                    letras = ["J", "C", "X", "S", "T", "U", "V"]
+                                    elif is_dem_sem:
+                                        cat = "SEM REMUNERAÇÃO"
+                                        if usar_dem_sem_antigo:
+                                            letras = ["I", "B", "Y", "R", "S", "T", "U"]
+                                        else:
+                                            letras = ["I", "B", "Y", "S", "T", "U", "V"]
+
+                                    elif is_com_remuner:
+                                        cat = "COM REMUNERAÇÃO"
+                                        if usar_padrao_antigo:
+                                            letras = ["I", "B", "Q", "S", "T", "U", "V"]
+                                        else:
+                                            letras = ["B", "I", "J", "T", "U", "V", "W"]
+
+                                    elif is_sem_remuner:
+                                        cat = "SEM REMUNERAÇÃO"
+                                        letras = ["I", "B", "W", "R", "S", "T", "U"]
+
+                                    else:
+                                        val_f = row[col_f] if (col_f and col_f in row) else None
+                                        is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
+
+                                        cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERAÇÃO"
+                                        letras = ["J", "C", "X", "S", "T", "U", "V"]
 
                                 row_vals = {
                                     "Categoria_Aba": cat,
@@ -933,19 +1017,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             if all_results:
                 st.session_state["pesquisa_df"] = pd.concat(all_results, ignore_index=True)
                 st.success(f"Dados consolidados com sucesso! **{len(st.session_state['pesquisa_df'])}** registros carregados.")
-                
-                components.html(
-                    """
-                    <script>
-                        setTimeout(function() {
-                            const doc = window.parent.document;
-                            const container = doc.querySelector('section.main') || doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement;
-                            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-                        }, 500);
-                    </script>
-                    """,
-                    height=0
-                )
             else:
                 st.warning("Nenhum dado encontrado com as configurações informadas.")
                 st.session_state["pesquisa_df"] = None
@@ -1182,10 +1253,3 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     if st.button("🗑️ Limpar Tudo", key="btn_limpar_tudo_op3"):
         st.session_state.clear()
         st.rerun()
-
-elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
-    titulo_estilizado("Filtro de Trabalhadores Ativos")
-
-elif menu_opcao == "SAIR DO SISTEMA":
-    st.stop()
-    
