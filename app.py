@@ -687,12 +687,14 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     if fazer_upload_btn:
         if uploaded_files:
             st.session_state["executar_config"] = True
+            st.session_state["rolar_apos_upload"] = True  # Sinaliza para rolar apenas neste clique
             st.success("Arquivos carregados com sucesso! Configure as abas abaixo:")
         else:
             st.error("Selecione pelo menos um arquivo antes de fazer o upload.")
             st.session_state["executar_config"] = False
+            st.session_state["rolar_apos_upload"] = False
 
-    if uploaded_files and st.session_state["executar_config"]:
+    if uploaded_files and st.session_state.get("executar_config"):
         settings = {}
         for f_idx, f in enumerate(uploaded_files):
             file_key = f"{f_idx}_{f.name}"
@@ -795,21 +797,21 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                 settings[file_key] = sheet_config
 
-        st.markdown('<div id="anchor_consolidar"></div>', unsafe_allow_html=True)
-        
-        components.html(
-            """
-            <script>
-                setTimeout(function() {
-                    var target = window.parent.document.getElementById('anchor_consolidar');
-                    if (target) {
-                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
-                }, 600);
-            </script>
-            """,
-            height=0
-        )
+        # --- EXECUTA A ROLAGEM SUAVE SOMENTE SE O BOTAO DE UPLOAD FOI CLICADO ---
+        if st.session_state.get("rolar_apos_upload"):
+            components.html(
+                """
+                <script>
+                    setTimeout(function() {
+                        const doc = window.parent.document;
+                        const container = doc.querySelector('section.main') || doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement;
+                        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                    }, 400);
+                </script>
+                """,
+                height=0
+            )
+            st.session_state["rolar_apos_upload"] = False  # Reseta o sinalizador para não rolar novamente em re-execuções
 
         if st.button("🔍 Carregar e Consolidar Dados para Pesquisa", key="btn_consolidar_op3"):
             all_results = []
@@ -956,19 +958,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             if all_results:
                 st.session_state["pesquisa_df"] = pd.concat(all_results, ignore_index=True)
                 st.success(f"Dados consolidados com sucesso! **{len(st.session_state['pesquisa_df'])}** registros carregados.")
-                
-                components.html(
-                    """
-                    <script>
-                        setTimeout(function() {
-                            const doc = window.parent.document;
-                            const container = doc.querySelector('section.main') || doc.querySelector('[data-testid="stAppViewContainer"]') || doc.documentElement;
-                            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-                        }, 500);
-                    </script>
-                    """,
-                    height=0
-                )
             else:
                 st.warning("Nenhum dado encontrado com as configurações informadas.")
                 st.session_state["pesquisa_df"] = None
@@ -1205,10 +1194,4 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     if st.button("🗑️ Limpar Tudo", key="btn_limpar_tudo_op3"):
         st.session_state.clear()
         st.rerun()
-
-elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
-    titulo_estilizado("Filtro de Trabalhadores Ativos")
-
-elif menu_opcao == "SAIR DO SISTEMA":
-    st.stop()
-    
+        
