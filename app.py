@@ -771,12 +771,18 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             col_f = obter_nome_coluna_por_letra(df_tmp, colunas_originais, 'F')
                             
                             usar_padrao_antigo = False
+                            usar_dem_sem_antigo = False
+
                             if mes_ano_arquivo != "SEM MÊS/ANO":
                                 try:
                                     mes_str, ano_str = mes_ano_arquivo.split('/')
                                     mes_val, ano_val = int(mes_str), int(ano_str)
+                                    
                                     if ano_val < 2025 or (ano_val == 2025 and mes_val < 9):
                                         usar_padrao_antigo = True
+
+                                    if ano_val < 2019 or (ano_val == 2019 and mes_val < 11):
+                                        usar_dem_sem_antigo = True
                                 except Exception:
                                     pass
 
@@ -787,7 +793,10 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                                 elif is_dem_sem:
                                     cat = "SEM REMUNERAÇÃO"
-                                    letras = ["I", "B", "Y", "S", "T", "U", "V"]
+                                    if usar_dem_sem_antigo:
+                                        letras = ["I", "B", "Y", "R", "S", "T", "U"]
+                                    else:
+                                        letras = ["I", "B", "Y", "S", "T", "U", "V"]
 
                                 elif is_com_remuner:
                                     cat = "COM REMUNERAÇÃO"
@@ -1052,5 +1061,4 @@ elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
     titulo_estilizado("Filtro de Trabalhadores Ativos")
 
 elif menu_opcao == "SAIR DO SISTEMA":
-    st.stop()
-    
+    st.stop()    
