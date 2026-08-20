@@ -660,7 +660,7 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
 
 
 
-# =============================================================================
+# =============================================================================# =============================================================================
 # --- OPÇÃO 3: PESQUISA PARA REMIÇÃO ---
 # =============================================================================
 elif menu_opcao == "PESQUISA PARA REMIÇÃO":
@@ -1099,6 +1099,9 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
             }
             ordem_meses_siglas = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"]
 
+            # LISTA UNIFICADA PARA GUARDAR TODOS OS DADOS SELECIONADOS
+            todos_dados_exportacao = []
+
             for titulo_grupo, cat_key, prefixo_key in grupos_categorias:
                 df_grupo = df_display_all[df_display_all["Categoria_Aba"] == cat_key]
 
@@ -1155,10 +1158,9 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                     
                     if not selecionados_grupo.empty:
                         st.markdown("---")
-                        st.markdown(f"### 💾 Espaço de Dados para Salvamento — {titulo_grupo}")
+                        st.markdown(f"### 📋 Espaço de Visualização dos Registros Selecionados — {titulo_grupo}")
                         
                         nomes_unicos = selecionados_grupo["NOME"].dropna().unique()
-                        dados_exportacao_grupo = []
 
                         for nome_interno in nomes_unicos:
                             df_nome_sel = selecionados_grupo[selecionados_grupo["NOME"] == nome_interno]
@@ -1217,7 +1219,8 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             st.markdown(f"**Total de Dias:** {total_dias_nome}")
                             st.markdown("<br>", unsafe_allow_html=True)
 
-                            dados_exportacao_grupo.append({
+                            # ADICIONA OS DADOS NA LISTA UNIFICADA
+                            todos_dados_exportacao.append({
                                 "nome": nome_interno,
                                 "organiz": organiz_val if organiz_val else "N/A",
                                 "funcao": funcao_val if funcao_val else "N/A",
@@ -1227,33 +1230,41 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                 "total_dias": total_dias_nome
                             })
 
-                        if dados_exportacao_grupo:
-                            st.markdown("#### 📥 Baixar Relatório do Salvamento")
-                            col_dl1, col_dl2 = st.columns(2)
-                            
-                            excel_bytes = gerar_excel_bytes(dados_exportacao_grupo)
-                            with col_dl1:
-                                st.download_button(
-                                    label="📊 Baixar Excel (.xlsx)",
-                                    data=excel_bytes,
-                                    file_name=f"salvamento_remicao_{prefixo_key}.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                    key=f"btn_dl_xlsx_{prefixo_key}_{st.session_state['uploader_key']}"
-                                )
-                            
-                            docx_bytes = gerar_docx_bytes(dados_exportacao_grupo)
-                            with col_dl2:
-                                st.download_button(
-                                    label="📄 Baixar Word (.docx)",
-                                    data=docx_bytes,
-                                    file_name=f"salvamento_remicao_{prefixo_key}.docx",
-                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                    key=f"btn_dl_docx_{prefixo_key}_{st.session_state['uploader_key']}"
-                                )
-
                         total_marcados = len(selecionados_grupo)
                         st.caption(f"📌 **{total_marcados}** item(ns) selecionado(s) nesta tabela.")
                         st.markdown("---")
+
+            # =================================================================
+            # BLOCO ÚNICO DE DOWNLOAD (CONSOLIDA AMBAS AS CATEGORIAS)
+            # =================================================================
+            if todos_dados_exportacao:
+                st.markdown("### 📥 Baixar Relatório Unificado (Todos os Selecionados)")
+                st.info(f"O relatório gerado conterá **{len(todos_dados_exportacao)}** registro(s) selecionado(s) nas tabelas acima.")
+
+                col_dl1, col_dl2 = st.columns(2)
+                
+                excel_bytes = gerar_excel_bytes(todos_dados_exportacao)
+                with col_dl1:
+                    st.download_button(
+                        label="📊 Baixar Excel Consolidador (.xlsx)",
+                        data=excel_bytes,
+                        file_name="salvamento_remicao_consolidado.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key=f"btn_dl_xlsx_unico_{st.session_state['uploader_key']}",
+                        type="primary"
+                    )
+                
+                docx_bytes = gerar_docx_bytes(todos_dados_exportacao)
+                with col_dl2:
+                    st.download_button(
+                        label="📄 Baixar Word Consolidador (.docx)",
+                        data=docx_bytes,
+                        file_name="salvamento_remicao_consolidado.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key=f"btn_dl_docx_unico_{st.session_state['uploader_key']}",
+                        type="primary"
+                    )
+                st.markdown("---")
         else:
             st.info("ℹ️ Nenhum registro selecionado ou encontrado na pesquisa.")
             
@@ -1265,4 +1276,4 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.session_state.clear()
         st.session_state["uploader_key"] = chave_atual
         st.rerun()
-
+        
