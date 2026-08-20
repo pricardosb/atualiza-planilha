@@ -877,12 +877,24 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             
                             usar_padrao_antigo = False
                             usar_dem_sem_antigo = False
+                            
+                            # VARIÁVEIS PARA AS NOVAS REGRAS DE 2023
+                            is_03_a_05_2023 = False
+                            is_06_a_07_2023 = False
 
                             if mes_ano_arquivo != "SEM MÊS/ANO":
                                 try:
                                     mes_str, ano_str = mes_ano_arquivo.split('/')
                                     mes_val, ano_val = int(mes_str), int(ano_str)
                                     
+                                    # Checagem das novas regras (Março a Maio 2023)
+                                    if ano_val == 2023 and mes_val in [3, 4, 5]:
+                                        is_03_a_05_2023 = True
+                                    # Checagem das novas regras (Junho e Julho 2023)
+                                    elif ano_val == 2023 and mes_val in [6, 7]:
+                                        is_06_a_07_2023 = True
+
+                                    # Regras legadas existentes
                                     if ano_val < 2025 or (ano_val == 2025 and mes_val < 9):
                                         usar_padrao_antigo = True
 
@@ -892,34 +904,68 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     pass
 
                             def extrair_dados_e_categoria(row):
-                                if is_dem_com:
-                                    cat = "COM REMUNERAÇÃO"
-                                    letras = ["I", "B", None, "S", "T", "U", "V"]
+                                
+                                # ==========================================
+                                # REGRAS ESPECÍFICAS DE 2023
+                                # ==========================================
+                                if is_03_a_05_2023:
+                                    if is_dem_com or is_com_remuner:
+                                        cat = "COM REMUNERAÇÃO"
+                                        letras = ["I", "B", "T", "V", "W", "X", "Y"]
+                                    elif is_dem_sem or is_sem_remuner:
+                                        cat = "SEM REMUNERAÇÃO"
+                                        letras = ["J", "B", "S", "U", "V", "W", "X"]
+                                    else: # Fallback para abas com nomes fora do padrão
+                                        val_f = row[col_f] if (col_f and col_f in row) else None
+                                        is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
+                                        cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERAÇÃO"
+                                        letras = ["I", "B", "T", "V", "W", "X", "Y"] if is_sim else ["J", "B", "S", "U", "V", "W", "X"]
+                                        
+                                elif is_06_a_07_2023:
+                                    if is_dem_com or is_com_remuner:
+                                        cat = "COM REMUNERAÇÃO"
+                                        letras = ["I", "B", "U", "W", "X", "Y", "Z"]
+                                    elif is_dem_sem or is_sem_remuner:
+                                        cat = "SEM REMUNERAÇÃO"
+                                        letras = ["J", "B", "S", "V", "W", "X", "Y"]
+                                    else: # Fallback para abas com nomes fora do padrão
+                                        val_f = row[col_f] if (col_f and col_f in row) else None
+                                        is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
+                                        cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERAÇÃO"
+                                        letras = ["I", "B", "U", "W", "X", "Y", "Z"] if is_sim else ["J", "B", "S", "V", "W", "X", "Y"]
 
-                                elif is_dem_sem:
-                                    cat = "SEM REMUNERAÇÃO"
-                                    if usar_dem_sem_antigo:
-                                        letras = ["I", "B", "Y", "R", "S", "T", "U"]
-                                    else:
-                                        letras = ["I", "B", "Y", "S", "T", "U", "V"]
-
-                                elif is_com_remuner:
-                                    cat = "COM REMUNERAÇÃO"
-                                    if usar_padrao_antigo:
-                                        letras = ["I", "B", "Q", "S", "T", "U", "V"]
-                                    else:
-                                        letras = ["B", "I", "J", "T", "U", "V", "W"]
-
-                                elif is_sem_remuner:
-                                    cat = "SEM REMUNERAÇÃO"
-                                    letras = ["I", "B", "W", "R", "S", "T", "U"]
-
+                                # ==========================================
+                                # REGRAS PADRÃO (Para os demais meses/anos)
+                                # ==========================================
                                 else:
-                                    val_f = row[col_f] if (col_f and col_f in row) else None
-                                    is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
+                                    if is_dem_com:
+                                        cat = "COM REMUNERAÇÃO"
+                                        letras = ["I", "B", None, "S", "T", "U", "V"]
 
-                                    cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERAÇÃO"
-                                    letras = ["J", "C", "X", "S", "T", "U", "V"]
+                                    elif is_dem_sem:
+                                        cat = "SEM REMUNERAÇÃO"
+                                        if usar_dem_sem_antigo:
+                                            letras = ["I", "B", "Y", "R", "S", "T", "U"]
+                                        else:
+                                            letras = ["I", "B", "Y", "S", "T", "U", "V"]
+
+                                    elif is_com_remuner:
+                                        cat = "COM REMUNERAÇÃO"
+                                        if usar_padrao_antigo:
+                                            letras = ["I", "B", "Q", "S", "T", "U", "V"]
+                                        else:
+                                            letras = ["B", "I", "J", "T", "U", "V", "W"]
+
+                                    elif is_sem_remuner:
+                                        cat = "SEM REMUNERAÇÃO"
+                                        letras = ["I", "B", "W", "R", "S", "T", "U"]
+
+                                    else:
+                                        val_f = row[col_f] if (col_f and col_f in row) else None
+                                        is_sim = str(val_f).strip().upper() == "SIM" if pd.notna(val_f) else False
+
+                                        cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERAÇÃO"
+                                        letras = ["J", "C", "X", "S", "T", "U", "V"]
 
                                 row_vals = {
                                     "Categoria_Aba": cat,
