@@ -754,7 +754,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         if target_col and target_col in df_tmp.columns:
                             colunas_originais = list(df_tmp.columns)
 
-                            df_tmp["MÊS/ANO - ABA"] = f"{mes_ano_arquivo} - {sheet}"
                             df_tmp["Aba Original"] = sheet
                             df_tmp["Campo Pesquisado"] = target_col
 
@@ -808,7 +807,10 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                     cat = "COM REMUNERAÇÃO" if is_sim else "SEM REMUNERAÇÃO"
                                     letras = ["J", "C", "X", "S", "T", "U", "V"]
 
-                                row_vals = {"Categoria_Aba": cat}
+                                row_vals = {
+                                    "Categoria_Aba": cat,
+                                    "LABEL_EXIBICAO": f"{mes_ano_arquivo} - {cat}"
+                                }
                                 for idx_p, let in enumerate(letras):
                                     if let is None:
                                         val = ""
@@ -823,6 +825,8 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                 return pd.Series(row_vals)
 
                             res_df = df_tmp.apply(extrair_dados_e_categoria, axis=1)
+                            df_tmp["MÊS/ANO - ABA"] = res_df["LABEL_EXIBICAO"]
+
                             df_processed = pd.concat([
                                 df_tmp[[
                                     "MÊS/ANO - ABA",
@@ -1049,5 +1053,4 @@ elif menu_opcao == "SOMENTE TRABALHADORES ATIVOS":
 
 elif menu_opcao == "SAIR DO SISTEMA":
     st.stop()
-    
     
