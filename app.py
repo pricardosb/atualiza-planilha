@@ -869,7 +869,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         if target_col and target_col in df_tmp.columns:
                             colunas_originais = list(df_tmp.columns)
 
-                            df_tmp["Aba Original"] = sheet
                             df_tmp["Campo Pesquisado"] = target_col
 
                             val_nome = df_tmp[target_col].astype(str).str.strip()
@@ -984,7 +983,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                                 row_vals = {
                                     "Categoria_Aba": cat,
-                                    "LABEL_EXIBICAO": f"{mes_ano_arquivo} - {cat} ({sheet})"
+                                    "LABEL_EXIBICAO": f"{mes_ano_arquivo} - {sheet}"
                                 }
                                 for idx_p, let in enumerate(letras):
                                     if let is None:
@@ -1000,12 +999,11 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                 return pd.Series(row_vals)
 
                             res_df = df_tmp.apply(extrair_dados_e_categoria, axis=1)
-                            df_tmp["MÊS/ANO - ABA"] = res_df["LABEL_EXIBICAO"]
+                            df_tmp["MÊS/ANO"] = res_df["LABEL_EXIBICAO"]
 
                             df_processed = pd.concat([
                                 df_tmp[[
-                                    "MÊS/ANO - ABA",
-                                    "Aba Original",
+                                    "MÊS/ANO",
                                     "Campo Pesquisado",
                                     "Nome (Visualização)",
                                     "NOME_LIMPO"
@@ -1064,7 +1062,7 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 except:
                     return 999999 if is_ascending else -1
             
-            df_view['chave_ordenacao'] = df_view['MÊS/ANO - ABA'].apply(extrair_chave_data)
+            df_view['chave_ordenacao'] = df_view['MÊS/ANO'].apply(extrair_chave_data)
             df_view = df_view.sort_values(by=['chave_ordenacao'], ascending=is_ascending).drop(columns=['chave_ordenacao'])
 
             df_display_all = formatar_datas_dataframe(df_view)
@@ -1117,9 +1115,8 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         else:
                             rename_map[pos_col] = f"Campo {idx_p+1}"
 
-                    cols_exibir = ["MÊS/ANO - ABA", "Aba Original"] + pos_cols
+                    cols_exibir = ["MÊS/ANO"] + pos_cols
                     df_render = df_grupo[cols_exibir].rename(columns=rename_map)
-                    df_render = df_render.rename(columns={"MÊS/ANO - ABA": "MES/ANO - ABA", "Aba Original": "ABA ORIGINAL"})
 
                     if "REAL" in df_render.columns:
                         df_render["REAL"] = df_render["REAL"].apply(formatar_sem_decimal)
@@ -1159,10 +1156,9 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         st.markdown("---")
                         st.markdown(f"### 📋 Espaço de Visualização dos Registros Selecionados — {titulo_grupo}")
                         
-                        # AGRUPA POR NOME E ABA ORIGINAL PARA MANTER VISUALIZAÇÃO SEPARADA POR ABA
-                        grupos_nome_aba = selecionados_grupo.groupby(["NOME", "ABA ORIGINAL"], sort=False)
+                        grupos_nome = selecionados_grupo.groupby("NOME", sort=False)
 
-                        for (nome_interno, aba_orig), df_nome_sel in grupos_nome_aba:
+                        for nome_interno, df_nome_sel in grupos_nome:
                             
                             organiz_val = ", ".join([str(v) for v in df_nome_sel["ORGANIZ"].dropna().unique() if str(v).strip() != ""])
                             funcao_val = ", ".join([str(v) for v in df_nome_sel["FUNÇÃO"].dropna().unique() if str(v).strip() != ""])
@@ -1173,7 +1169,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                             st.markdown(
                                 f"**NOME:** {nome_interno} &nbsp;|&nbsp; "
-                                f"**ABA:** `{aba_orig}` &nbsp;|&nbsp; "
                                 f"**ORGANIZAÇÃO:** {organiz_val if organiz_val else 'N/A'} &nbsp;|&nbsp; "
                                 f"**FUNÇÃO:** {funcao_val if funcao_val else 'N/A'} &nbsp;|&nbsp; "
                                 f"**REMUNERAÇÃO:** {cat_key} &nbsp;|&nbsp; "
@@ -1182,8 +1177,8 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                             
                             matrix_data = []
                             for _, r_row in df_nome_sel.iterrows():
-                                raw_mes_ano_aba = str(r_row.get("MES/ANO - ABA", ""))
-                                data_mes_ano = raw_mes_ano_aba.split(" - ")[0] if " - " in raw_mes_ano_aba else raw_mes_ano_aba
+                                raw_mes_ano = str(r_row.get("MÊS/ANO", ""))
+                                data_mes_ano = raw_mes_ano.split(" - ")[0] if " - " in raw_mes_ano else raw_mes_ano
                                 
                                 mes_sigla, ano_str = "N/A", "N/A"
                                 if "/" in data_mes_ano:
@@ -1221,7 +1216,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
                             todos_dados_exportacao.append({
                                 "nome": nome_interno,
-                                "aba": aba_orig,
                                 "organiz": organiz_val if organiz_val else "N/A",
                                 "funcao": funcao_val if funcao_val else "N/A",
                                 "remuneracao": cat_key,
@@ -1235,11 +1229,11 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                         st.markdown("---")
 
             # =================================================================
-            # BLOCO ÚNICO DE DOWNLOAD (CONSOLIDA AMBAS AS CATEGORIAS SEPARADAS POR ABA)
+            # BLOCO ÚNICO DE DOWNLOAD (CONSOLIDA AMBAS AS CATEGORIAS)
             # =================================================================
             if todos_dados_exportacao:
                 st.markdown("### 📥 Baixar Relatório Unificado (Todos os Selecionados)")
-                st.info(f"O relatório gerado conterá **{len(todos_dados_exportacao)}** registro(s)/aba(s) selecionado(s) nas tabelas acima.")
+                st.info(f"O relatório gerado conterá **{len(todos_dados_exportacao)}** registro(s) selecionado(s) nas tabelas acima.")
 
                 col_dl1, col_dl2 = st.columns(2)
                 
@@ -1276,4 +1270,5 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         st.session_state.clear()
         st.session_state["uploader_key"] = chave_atual
         st.rerun()
+        
         
