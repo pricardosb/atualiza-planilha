@@ -11,12 +11,110 @@ from openpyxl.styles import Font
 from copy import copy
 import streamlit.components.v1 as components
 
-# --- IMPORTAÇÕES DO GOOGLE DRIVE ---
-from utils.drive_helpers import (
-    listar_arquivos_da_pasta,
-    baixar_arquivo_bytes,
-    salvar_arquivo_no_drive
-)
+# --- IMPORTAÇÕES DO GOOGLE DRIVE (EMBUTIDAS) ---
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
+
+# =============================================================================
+# --- CONEXÃO E FUNÇÕES DO GOOGLE DRIVE ---
+# =============================================================================
+SCOPES = ['https://www.googleapis.com/auth/drive']
+
+def obter_servico_drive():
+    """Autentica e retorna o serviço da API do Google Drive usando st.secrets."""
+    try:
+        credentials_info = st.secrets["gcp_service_account"]
+        creds = Credentials.from_service_account_info(credentials_info, scopes=SCOPES)
+        service = build('drive', 'v3', credentials=creds)
+        return service
+    except Exception as e:
+        st.error(f"❌ Erro ao autenticar no Google Drive. Verifique o st.secrets. Detalhes: {e}")
+        return None
+
+def listar_arquivos_da_pasta(folder_id):
+    """Lista todos os arquivos dentro de uma pasta específica no Drive."""
+    service = obter_servico_drive()
+    if not service:
+        return []
+    
+    try:
+        query = f"'{folder_id}' in parents and trashed = false"
+        results = service.files().list(
+            q=query,
+            pageSize=1000,
+            fields="nextPageToken, files(id, name, mimeType)"
+        ).execute()
+        
+        items = results.get('files', [])
+        return items
+    except Exception as e:
+        st.error(f"❌ Erro ao listar arquivos da pasta {folder_id}: {e}")
+        return []
+
+def baixar_arquivo_bytes(file_id: str) -> bytes:
+    """Baixa o conteúdo de um arquivo do Drive para a memória (bytes)."""
+    service = obter_servico_drive()
+    if not service:
+        return b""
+        
+    try:
+        request = service.files().get_media(fileId=file_id)
+        file_stream = io.BytesIO()
+        downloader = MediaIoBaseDownload(file_stream, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+        return file_stream.getvalue()
+    except Exception as e:
+        st.error(f"❌ Erro ao baixar o arquivo {file_id}: {e}")
+        return b""
+
+def salvar_arquivo_no_drive(nome_arquivo, bytes_conteudo, mime_type, folder_id):
+    """Salva um novo arquivo no Google Drive e retorna o link de visualização."""
+    service = obter_servico_drive()
+    if not service:
+        return ""
+        
+    try:
+        file_metadata = {
+            'name': nome_arquivo,
+            'parents': [folder_id]
+        }
+        media = MediaIoBaseUpload(io.BytesIO(bytes_conteudo), mimetype=mime_type, resumable=True)
+        
+        file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id, webViewLink'
+        ).execute()
+        
+        return file.get('webViewLink', f"https://drive.google.com/file/d/{file.get('id')}/view")
+    except Exception as e:
+        st.error(f"❌ Erro ao salvar o arquivo no Drive: {e}")
+        return ""
+
+def eh_arquivo_valido(item):
+    """Filtra pastas válidas e ignora arquivos temporários, ocultos e de sistema."""
+    nome = item.get("name", "")
+    if not nome:
+        return False
+    if nome.lower() == 'credentials.json':
+        return False
+    if item.get('mimeType') == 'application/vnd.google-apps.folder':
+        return True
+    if nome.lower() in ('thumbs.db', 'desktop.ini'):
+        return False
+    if nome.startswith(('.~', '~$', '.')):
+        return False
+    if '.' not in nome:
+        return False
+    return True
+
+
+# =============================================================================
+# --- FUNÇÕES GERAIS E DE SUPORTE ---
+# =============================================================================
 
 def tentar_converter_numero(val):
     """Converte texto numérico em int/float nativo para o Excel reconhecer como número."""
@@ -37,11 +135,6 @@ def limpar_texto_xml(texto):
         return ""
     texto_str = str(texto)
     return re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F]', '', texto_str)
-
-
-# =============================================================================
-# --- FUNÇÕES DE EXPORTAÇÃO CORRIGIDAS ---
-# =============================================================================
 
 def gerar_excel_bytes(dados_exportacao):
     output = io.BytesIO()
@@ -68,7 +161,6 @@ def gerar_excel_bytes(dados_exportacao):
 
     wb.save(output)
     return output.getvalue()
-
 
 def gerar_docx_bytes(dados_exportacao):
     output = io.BytesIO()
@@ -137,30 +229,6 @@ def extrair_mes_ano_do_nome(nome_arquivo):
     
     return "SEM MÊS/ANO"
 
-
-# --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="SINALE WEB", layout="wide")
-
-# --- INICIALIZAÇÃO DE ESTADOS GLOBAIS ---
-if "source_df" not in st.session_state:
-    st.session_state["source_df"] = None
-if "wb_data" not in st.session_state:
-    st.session_state["wb_data"] = None
-if "last_dest_name" not in st.session_state:
-    st.session_state["last_dest_name"] = None
-if "fila_modificacoes" not in st.session_state:
-    st.session_state["fila_modificacoes"] = []
-if "select_all" not in st.session_state:
-    st.session_state["select_all"] = False
-if "file_settings" not in st.session_state:
-    st.session_state["file_settings"] = {}
-if "pesquisa_df" not in st.session_state:
-    st.session_state["pesquisa_df"] = None
-if "executar_config" not in st.session_state:
-    st.session_state["executar_config"] = False
-
-
-# --- FUNÇÕES DE SUPORTE ---
 def copiar_estilo_completo(origem, destino):
     if origem.has_style:
         destino.font = copy(origem.font)
@@ -169,7 +237,6 @@ def copiar_estilo_completo(origem, destino):
         destino.number_format = copy(origem.number_format)
         destino.protection = copy(origem.protection)
         destino.alignment = copy(origem.alignment)
-
 
 def deduplicar_colunas(colunas):
     vistos = {}
@@ -184,7 +251,6 @@ def deduplicar_colunas(colunas):
             novas_colunas.append(col_str)
     return novas_colunas
 
-
 def extrair_valor_limpo(df, idx, col_name):
     try:
         val = df.iloc[idx][col_name]
@@ -195,7 +261,6 @@ def extrair_valor_limpo(df, idx, col_name):
         return val.item() if hasattr(val, 'item') else val
     except:
         return None
-
 
 def converter_valor_inteligente(val_str, dtype_original):
     if val_str is None or str(val_str).strip() == "":
@@ -216,7 +281,6 @@ def converter_valor_inteligente(val_str, dtype_original):
     except ValueError:
         return val_str
 
-
 def formatar_datas_dataframe(df_input):
     df_out = df_input.copy()
     for col in df_out.columns:
@@ -230,7 +294,6 @@ def formatar_datas_dataframe(df_input):
                 )
             )
     return df_out
-
 
 def calcular_pascoa(ano):
     a = ano % 19
@@ -248,7 +311,6 @@ def calcular_pascoa(ano):
     mes = (h + L - 7 * m + 114) // 31
     dia = ((h + L - 7 * m + 114) % 31) + 1
     return datetime.date(ano, mes, dia)
-
 
 def obter_estatisticas_mes(ano, mes):
     cal = calendar.monthcalendar(ano, mes)
@@ -306,7 +368,6 @@ def obter_estatisticas_mes(ano, mes):
         "feriados_detalhes": lista_feriados_detalhes
     }
 
-
 def gerar_arquivo_atualizado_bytes(source_input, header, fila, df_original, sheet_name=None):
     wb = load_workbook(io.BytesIO(source_input) if isinstance(source_input, bytes) else source_input)
     ws = wb[sheet_name] if sheet_name and sheet_name in wb.sheetnames else wb[wb.sheetnames[0]]
@@ -338,13 +399,11 @@ def gerar_arquivo_atualizado_bytes(source_input, header, fila, df_original, shee
     wb.save(buffer)
     return buffer.getvalue()
 
-
 def titulo_estilizado(subtitulo=""):
     st.markdown(
         f"<div style='text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border-radius: 12px; margin-bottom: 1.5rem;'><h1>⚡ SINALE WEB</h1><p>{subtitulo}</p></div>",
         unsafe_allow_html=True
     )
-
 
 def obter_nome_coluna_por_letra(df, colunas_disponiveis, letra):
     mapa_letras = {
@@ -357,7 +416,6 @@ def obter_nome_coluna_por_letra(df, colunas_disponiveis, letra):
     if idx is not None and idx < len(colunas_disponiveis):
         return colunas_disponiveis[idx]
     return None
-
 
 def gerar_config_largura_colunas(df_subset, colunas):
     config = {}
@@ -380,24 +438,6 @@ def gerar_config_largura_colunas(df_subset, colunas):
             config[col] = st.column_config.Column(width=largura_pixels)
             
     return config
-
-# --- FUNÇÕES AUXILIARES DO GOOGLE DRIVE ---
-def eh_arquivo_valido(item):
-    """Filtra pastas válidas e ignora arquivos temporários, ocultos e de sistema."""
-    nome = item.get("name", "")
-    if not nome:
-        return False
-    if nome.lower() == 'credentials.json':
-        return False
-    if item.get('mimeType') == 'application/vnd.google-apps.folder':
-        return True
-    if nome.lower() in ('thumbs.db', 'desktop.ini'):
-        return False
-    if nome.startswith(('.~', '~$', '.')):
-        return False
-    if '.' not in nome:
-        return False
-    return True
 
 def limpar_resultados_downstream():
     """Limpa a visualização e caches para manter a tela limpa ao alterar seleções."""
@@ -446,7 +486,34 @@ def alternar_marcar_desmarcar_pasta(folder_id, folder_name="Pasta"):
 
     limpar_resultados_downstream()
 
+# =============================================================================
+# --- CONFIGURAÇÃO DA PÁGINA E ESTADOS ---
+# =============================================================================
+
+st.set_page_config(page_title="SINALE WEB", layout="wide")
+
+if "source_df" not in st.session_state:
+    st.session_state["source_df"] = None
+if "wb_data" not in st.session_state:
+    st.session_state["wb_data"] = None
+if "last_dest_name" not in st.session_state:
+    st.session_state["last_dest_name"] = None
+if "fila_modificacoes" not in st.session_state:
+    st.session_state["fila_modificacoes"] = []
+if "select_all" not in st.session_state:
+    st.session_state["select_all"] = False
+if "file_settings" not in st.session_state:
+    st.session_state["file_settings"] = {}
+if "pesquisa_df" not in st.session_state:
+    st.session_state["pesquisa_df"] = None
+if "executar_config" not in st.session_state:
+    st.session_state["executar_config"] = False
+
+
+# =============================================================================
 # --- MENU PRINCIPAL ---
+# =============================================================================
+
 menu_opcao = st.sidebar.radio(
     "Selecione a rotina:",
     [
@@ -458,6 +525,7 @@ menu_opcao = st.sidebar.radio(
         "SAIR DO SISTEMA"
     ]
 )
+
 
 # =============================================================================
 # --- OPÇÃO 1: INCLUSÃO DE TRABALHO ---
@@ -1170,5 +1238,3 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     if st.button("🗑️ Limpar Tudo"):
         c_at = st.session_state.get("uploader_key", 0) + 1
         st.session_state.clear(); st.session_state["uploader_key"] = c_at; st.rerun()
-
-# [As opções LIMPAR ARQUIVO, SOMENTE TRABALHADORES ATIVOS, SAIR DO SISTEMA devem seguir aqui conforme o restante original do seu arquivo]
