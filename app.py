@@ -699,14 +699,9 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                 st.error(f"Erro ao ler o arquivo {f.name}: {e}.")
                 continue
 
-            pref_sheets = [s for s in sheets_available if any(p in s.strip().upper() for p in ["COM REMUNER", "SEM REMUNER", "DEM_COM", "DEM_SEM"])]
-
-            if pref_sheets:
-                default_sheets = pref_sheets
-                is_fallback = False
-            else:
-                default_sheets = [sheets_available[0]] if sheets_available else []
-                is_fallback = True
+            # Removida a restrição de prefixo numérico, listando todas as abas disponíveis
+            default_sheets = sheets_available if sheets_available else []
+            is_fallback = False
 
             with st.expander(f"📁 Configurações para: Arquivo {f_idx+1} - {f.name}", expanded=True):
                 selected_sheets = st.multiselect(
