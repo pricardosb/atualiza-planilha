@@ -95,7 +95,7 @@ def salvar_arquivo_no_drive(nome_arquivo, bytes_conteudo, mime_type, folder_id):
         return ""
 
 def eh_arquivo_valido(item):
-    """Filtra pastas válidas e ignora arquivos temporários, ocultos e de sistema."""
+    """Filtra pastas e aceita planilhas de forma permissiva."""
     nome = item.get("name", "")
     if not nome:
         return False
@@ -107,8 +107,8 @@ def eh_arquivo_valido(item):
         return False
     if nome.startswith(('.~', '~$', '.')):
         return False
-    if '.' not in nome:
-        return False
+    
+    # Aceita arquivos comuns ou ignora a trava de ponto no nome
     return True
 
 
@@ -794,8 +794,8 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     if "uploader_key" not in st.session_state:
         st.session_state["uploader_key"] = 0
 
-    # Defina o ID da pasta raiz do seu Drive aqui
-    ROOT_FOLDER_ID = "1ZeCu40Bzt1hb1BsgNArG_zKR54GPcuOY"
+    # Defina o ID da pasta raiz do seu Drive via st.secrets
+    ROOT_FOLDER_ID = st.secrets.get("pasta_id", "1ZeCu40Bzt1hb1BsgNArG_zKR54GPcuOY")
 
     if "itens_selecionados_map" not in st.session_state:
         st.session_state["itens_selecionados_map"] = {}
