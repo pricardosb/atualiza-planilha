@@ -52,7 +52,6 @@ def gerar_excel_bytes(dados_exportacao):
             headers = ["ANO"] + list(pivot_df.columns)
             ws.append(headers)
             for idx_row, row_data in pivot_df.iterrows():
-                # Converte dinamicamente para número real no Excel
                 row_vals = [tentar_converter_numero(idx_row)] + [tentar_converter_numero(v) for v in row_data.values]
                 ws.append(row_vals)
 
@@ -109,7 +108,6 @@ def gerar_docx_bytes(dados_exportacao):
 def extrair_mes_ano_do_nome(nome_arquivo):
     import re
     
-    # Dicionário para converter o nome do mês escrito no arquivo em número
     meses = {
         "JANEIRO": "01", "FEVEREIRO": "02", "MARÇO": "03", "MARCO": "03",
         "ABRIL": "04", "MAIO": "05", "JUNHO": "06", "JULHO": "07",
@@ -118,23 +116,18 @@ def extrair_mes_ano_do_nome(nome_arquivo):
     }
     
     nome_upper = str(nome_arquivo).upper()
-    
-    # Procura um ano de 4 dígitos que comece com 20 (ex: 2023, 2024)
     ano_match = re.search(r'\b(20\d{2})\b', nome_upper)
     ano = ano_match.group(1) if ano_match else None
     
-    # Procura o mês correspondente no nome do arquivo
     mes = None
     for nome_mes, num_mes in meses.items():
         if nome_mes in nome_upper:
             mes = num_mes
             break
             
-    # Se achou mês e ano, retorna no formato MM/YYYY
     if mes and ano:
         return f"{mes}/{ano}"
     
-    # Se falhar em achar um dos dois, retorna a mensagem padrão
     return "SEM MÊS/ANO"
 
 
@@ -365,19 +358,13 @@ def gerar_config_largura_colunas(df_subset, colunas):
         if col in df_subset.columns:
             nome_coluna_upper = str(col).strip().upper()
             
-            # 1. REGRA PARA A COLUNA "NOME": Tamanho baseado no CONTEÚDO
             if nome_coluna_upper == "NOME":
                 tamanho_conteudo = df_subset[col].astype(str).str.len().max() if not df_subset[col].empty else 10
                 if pd.isna(tamanho_conteudo):
                     tamanho_conteudo = 10
                 
-                # ~8 pixels por letra + margem
                 largura_pixels = int(tamanho_conteudo * 8) + 20
-                
-                # Garante que não fique pequena demais nem ocupe a tela inteira sozinha
                 largura_pixels = max(150, min(largura_pixels, 450))
-                
-            # 2. REGRA PARA AS DEMAIS COLUNAS: Tamanho baseado EXCLUSIVAMENTE no CABEÇALHO
             else:
                 tamanho_titulo = len(str(col))
                 largura_pixels = int(tamanho_titulo * 9) + 20
@@ -666,7 +653,6 @@ elif menu_opcao == "ATUALIZAÇÕES GERAIS":
 elif menu_opcao == "PESQUISA PARA REMIÇÃO":
     titulo_estilizado("Pesquisa para Remição")
 
-    # Inicializa a chave dinâmica para zerar os componentes visuais no "Limpar Tudo"
     if "uploader_key" not in st.session_state:
         st.session_state["uploader_key"] = 0
 
@@ -803,7 +789,6 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
 
         btn_consolidar = st.button("🔍 Carregar e Consolidar Dados para Pesquisa", key="btn_consolidar_op3", type="primary")
 
-        # ROLAGEM AUTOMÁTICA ATÉ O FINAL
         if st.session_state.get("rolar_apos_upload"):
             components.html(
                 """
@@ -1224,13 +1209,10 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
                                 "total_dias": total_dias_nome
                             })
 
-                        total_marcados = len(selecionados_grupo)
-                        st.caption(f"📌 **{total_marcados}** item(ns) selecionado(s) nesta tabela.")
-                        st.markdown("---")
+                    total_marcados = len(selecionados_grupo)
+                    st.caption(f"📌 **{total_marcados}** item(ns) selecionado(s) nesta tabela.")
+                    st.markdown("---")
 
-            # =================================================================
-            # BLOCO ÚNICO DE DOWNLOAD (CONSOLIDA AMBAS AS CATEGORIAS)
-            # =================================================================
             if todos_dados_exportacao:
                 st.markdown("### 📥 Baixar Relatório Unificado (Todos os Selecionados)")
                 st.info(f"O relatório gerado conterá **{len(todos_dados_exportacao)}** registro(s) selecionado(s) nas tabelas acima.")
@@ -1262,13 +1244,8 @@ elif menu_opcao == "PESQUISA PARA REMIÇÃO":
         else:
             st.info("ℹ️ Nenhum registro selecionado ou encontrado na pesquisa.")
             
-    # =========================================================================
-    # BOTÃO LIMPAR TUDO - RESET COMPLETO DE TELA E COMPONENTES
-    # =========================================================================
     if st.button("🗑️ Limpar Tudo", key="btn_limpar_tudo_op3"):
         chave_atual = st.session_state.get("uploader_key", 0) + 1
         st.session_state.clear()
         st.session_state["uploader_key"] = chave_atual
         st.rerun()
-        
-        
